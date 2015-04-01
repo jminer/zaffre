@@ -364,6 +364,17 @@ fn test_rect() {
     // error: internal compiler error: Impl DefId { krate: 0, node: 114 }:coordinates::i32.NumZero was matchable against Obligation(predicate=Binder(TraitPredicate(coordinates::NumZero)),depth=0) but now is not
     assert!(Rect(4.0f64, 5.0, 3.0, 3.0).contains_pt(Point(4.5, 6.1)));
 
+    assert!(Rect(4, 5, 3, 3).contains_rect(Rect(5, 6, 1, 1)));
+    assert!(Rect(4, 5, 3, 3).contains_rect(Rect(4, 5, 3, 3)));
+    assert!(!Rect(4, 5, 3, 3).contains_rect(Rect(5, 6, 3, 3)));
+    assert!(!Rect(4, 5, 3, 3).contains_rect(Rect(5, 6, 4, 1)));
+    assert!(!Rect(4, 5, 3, 3).contains_rect(Rect(5, 6, 1, 4)));
+    assert!(!Rect(4, 5, 3, 3).contains_rect(Rect(5, 4, 1, 4)));
+    assert!(!Rect(4, 5, 3, 3).contains_rect(Rect(3, 6, 4, 1)));
+    assert!(!Rect(4, 5, 3, 3).contains_rect(Rect(20, 30, 5, 5)));
+    assert!(!Rect(4, 5, 3, 3).contains_rect(Rect(-20, -30, 5, 5)));
+    assert!(Rect(4.0f64, 5.0, 3.0, 3.0).contains_rect(Rect(5.6, 6.0, 1.3, 0.5)));
+    assert!(!Rect(4.0f64, 5.0, 3.0, 3.0).contains_rect(Rect(5.6, 6.0, 1.5, 0.5)));
 }
 
 impl<T> Add<BorderSize<T>> for Rect<T> where T: Copy
