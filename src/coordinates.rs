@@ -375,6 +375,12 @@ fn test_rect() {
     assert!(!Rect(4, 5, 3, 3).contains_rect(Rect(-20, -30, 5, 5)));
     assert!(Rect(4.0f64, 5.0, 3.0, 3.0).contains_rect(Rect(5.6, 6.0, 1.3, 0.5)));
     assert!(!Rect(4.0f64, 5.0, 3.0, 3.0).contains_rect(Rect(5.6, 6.0, 1.5, 0.5)));
+
+    assert_eq!(&Rect(10, 15, 2, 3).normalize(), &Rect(10, 15, 2, 3));
+    assert_eq!(&Rect(10, 15, -2, 3).normalize(), &Rect(8, 15, 2, 3));
+    assert_eq!(&Rect(10, 15, 2, -3).normalize(), &Rect(10, 12, 2, 3));
+    assert_eq!(&Rect(10, 15, -2, -3).normalize(), &Rect(8, 12, 2, 3));
+    assert_eq!(&Rect(10.0f64, 15.0, -2.0, 3.0).normalize(), &Rect(8.0, 15.0, 2.0, 3.0));
 }
 
 impl<T> Add<BorderSize<T>> for Rect<T> where T: Copy
