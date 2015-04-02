@@ -307,7 +307,7 @@ impl<T> Rect<T> where T: Copy + Add<Output = T> {
 
 impl<T> Rect<T> where T: Copy + Add<Output = T> + NumZero + PartialOrd {
     /// Returns true if `pt` is inside this rectangle.
-    fn contains_pt(&self, pt: Point<T>) -> bool {
+    pub fn contains_pt(&self, pt: Point<T>) -> bool {
         // A point is NOT treated like a zero size rectangle.
         // A point on the right edge is not in the rectangle, but if two rectangles' right
         // edges are at the same location, one rectangle can still contain the other.
@@ -318,7 +318,7 @@ impl<T> Rect<T> where T: Copy + Add<Output = T> + NumZero + PartialOrd {
 
     /// Returns true if `rect` is inside this rectangle.
     /// The rectangle's width and height must be positive.
-    fn contains_rect(&self, rect: Rect<T>) -> bool {
+    pub fn contains_rect(&self, rect: Rect<T>) -> bool {
         debug_assert!(self.width() >= NumZero::zero() && self.height() >= NumZero::zero());
         rect.x() >= self.x() && rect.right() <= self.right() &&
         rect.y() >= self.y() && rect.bottom() <= self.bottom()
@@ -326,7 +326,7 @@ impl<T> Rect<T> where T: Copy + Add<Output = T> + NumZero + PartialOrd {
 }
 
 impl<T> Rect<T> where T: Copy + Add<Output = T> + Neg<Output = T> + NumZero + PartialOrd {
-    fn normalize(&self) -> Rect<T> {
+    pub fn normalize(&self) -> Rect<T> {
         let (x, width) = if self.width() < NumZero::zero() {
             (self.x() + self.width(), -self.width())
         } else {
