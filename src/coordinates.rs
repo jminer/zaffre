@@ -71,7 +71,7 @@ impl NumZero for f64 {
 
 
 /// A point is an x and y pair.
-#[derive(Debug, Copy, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Point<T = f64>(pub T, pub T);
 
 impl<T> Point<T> where T: Copy {
@@ -129,7 +129,7 @@ fn test_point() {
 
 
 /// A size is a width and height.
-#[derive(Debug, Copy, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Size<T = f64>(pub T, pub T);
 
 impl<T> Size<T> where T: Copy {
@@ -243,7 +243,7 @@ fn test_size() {
 
 
 /// A rectangle consisting of a point and size (x, y, width, height)
-#[derive(Debug, Copy, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Rect<T = f64>(pub T, pub T, pub T, pub T);
 
 impl<T> Rect<T> where T: Copy {
@@ -419,7 +419,7 @@ fn test_ops() {
 
 
 /// A border size stores a size for the left, top, right, and bottom edges of a rectangle
-#[derive(Debug, Copy, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct BorderSize<T = f64>(pub T, pub T, pub T, pub T);
 
 impl<T> BorderSize<T> where T: Copy {
