@@ -1,5 +1,8 @@
 
-pub mod coordinates;
+extern crate nalgebra;
+extern crate num;
 
-pub use coordinates::{Point, Size, Rect, BorderSize};
+mod coordinates;
 
+pub use nalgebra::Point2;
+pub use coordinates::{Size2, Rect, BorderSize2};
