@@ -1,9 +1,9 @@
 
 [package]
-name = "dynamin2d"
+name = "zaffre"
 version = "0.0.1"
 authors = ["Jordan Miner <jminer7@gmail.com>"]
-description = "Dynamin2D is a 2D graphics library."
+description = "Zaffre is a 2D graphics library."
 keywords = ["2d", "graphics"]
 license = "MPL-2.0"
 
