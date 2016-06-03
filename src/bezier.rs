@@ -132,6 +132,8 @@ impl<N, F> Bezier<N> where F: BaseFloat
     }
 
     fn split_using_de_casteljau(&self, t: f32) -> (Bezier<N>, Bezier<N>) {
+        // From benchmarking, it seems this function is a little faster than `split_using_matrix`
+        // (21ns vs 25ns)
         // https://pomax.github.io/bezierinfo/#splitting
         let t: N::Float = cast(t);
         // ugh, the casts are so verbose
@@ -163,8 +165,10 @@ impl<N, F> Bezier<N> where F: BaseFloat
         (cast(bez0), cast(bez1))
     }
 
-    // pub fn split(&self, t: f32) -> (Bezier<N>, Bezier<N>) {
-    // }
+    pub fn split(&self, t: f32) -> (Bezier<N>, Bezier<N>) {
+        self.split_using_de_casteljau(t)
+    }
+
     // pub fn tangent_at(&self, t: f32) -> Vector2<N> {
     // }
     // pub fn project_point(&self, pt: Point2<N>) -> f32 {
@@ -184,4 +188,76 @@ fn test_split() {
     let pair1 = bez0.split_using_matrix(0.5);
     assert_approx_eq!(pair0.0, pair1.0);
     assert_approx_eq!(pair0.1, pair1.1);
+}
+
+mod benchmarks {
+    use ::test::{black_box, Bencher};
+    use ::Point2;
+    use super::Bezier;
+
+    #[bench]
+    fn bench_split_using_matrix(b: &mut Bencher) {
+        b.iter(|| {
+            let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.0)),
+                                black_box(Point2::new(10.0, 30.0)),
+                                black_box(Point2::new(50.0, 30.0)),
+                                black_box(Point2::new(60.0, 10.0)));
+
+            black_box(bez0.split_using_matrix(black_box(0.5)));
+
+            let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.1)),
+                                black_box(Point2::new(10.0, 30.0)),
+                                black_box(Point2::new(50.0, 30.0)),
+                                black_box(Point2::new(60.0, 10.0)));
+
+            black_box(bez0.split_using_matrix(black_box(0.5)));
+
+            let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.2)),
+                                black_box(Point2::new(10.0, 30.0)),
+                                black_box(Point2::new(50.0, 30.0)),
+                                black_box(Point2::new(60.0, 10.0)));
+
+            black_box(bez0.split_using_matrix(black_box(0.5)));
+
+            let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.3)),
+                                black_box(Point2::new(10.0, 30.0)),
+                                black_box(Point2::new(50.0, 30.0)),
+                                black_box(Point2::new(60.0, 10.0)));
+
+            black_box(bez0.split_using_matrix(black_box(0.5)));
+        });
+    }
+
+    #[bench]
+    fn bench_split_using_de_casteljau(b: &mut Bencher) {
+        b.iter(|| {
+            let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.0)),
+                                black_box(Point2::new(10.0, 30.0)),
+                                black_box(Point2::new(50.0, 30.0)),
+                                black_box(Point2::new(60.0, 10.0)));
+
+            black_box(bez0.split_using_de_casteljau(black_box(0.5)));
+
+            let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.1)),
+                                black_box(Point2::new(10.0, 30.0)),
+                                black_box(Point2::new(50.0, 30.0)),
+                                black_box(Point2::new(60.0, 10.0)));
+
+            black_box(bez0.split_using_de_casteljau(black_box(0.5)));
+
+            let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.2)),
+                                black_box(Point2::new(10.0, 30.0)),
+                                black_box(Point2::new(50.0, 30.0)),
+                                black_box(Point2::new(60.0, 10.0)));
+
+            black_box(bez0.split_using_de_casteljau(black_box(0.5)));
+
+            let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.3)),
+                                black_box(Point2::new(10.0, 30.0)),
+                                black_box(Point2::new(50.0, 30.0)),
+                                black_box(Point2::new(60.0, 10.0)));
+
+            black_box(bez0.split_using_de_casteljau(black_box(0.5)));
+        });
+    }
 }
