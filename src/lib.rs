@@ -2,6 +2,7 @@
 extern crate nalgebra;
 extern crate num;
 
+mod bezier;
 mod coordinates;
 
 pub use nalgebra::Point2;
