@@ -21,6 +21,15 @@ impl<N> Size2<N> {
     }
 }
 
+impl<Nin: Copy, Nout: Copy + Cast<Nin>> Cast<Size2<Nin>> for Size2<Nout> {
+    fn from(sz: Size2<Nin>) -> Size2<Nout> {
+        Size2 {
+            width: cast(sz.width),
+            height: cast(sz.height),
+        }
+    }
+}
+
 impl<N: Copy> Transpose for Size2<N> {
     /// Swaps the width and height.
     #[inline]
@@ -147,6 +156,17 @@ impl<N> Rect<N> {
             y: y,
             width: width,
             height: height,
+        }
+    }
+}
+
+impl<Nin: Copy, Nout: Copy + Cast<Nin>> Cast<Rect<Nin>> for Rect<Nout> {
+    fn from(rect: Rect<Nin>) -> Rect<Nout> {
+        Rect {
+            x: cast(rect.x),
+            y: cast(rect.y),
+            width: cast(rect.width),
+            height: cast(rect.height),
         }
     }
 }
@@ -324,6 +344,17 @@ impl<N> BorderSize2<N> {
             top: top,
             right: right,
             bottom: bottom,
+        }
+    }
+}
+
+impl<Nin: Copy, Nout: Copy + Cast<Nin>> Cast<BorderSize2<Nin>> for BorderSize2<Nout> {
+    fn from(bs: BorderSize2<Nin>) -> BorderSize2<Nout> {
+        BorderSize2 {
+            left: cast(bs.left),
+            top: cast(bs.top),
+            right: cast(bs.right),
+            bottom: cast(bs.bottom),
         }
     }
 }
