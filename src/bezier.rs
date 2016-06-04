@@ -4,7 +4,7 @@ use std::ops::{Add, Div, Sub};
 use super::Rect;
 use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast, Point2};
 
-trait LargerFloat: Sized {
+pub trait LargerFloat: Sized {
     type Float: BaseFloat + Cast<Self> + Cast<f32>;
 }
 
@@ -42,7 +42,7 @@ pub enum CurveType {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-struct Bezier<N> {
+pub struct Bezier<N> {
     pub p0: Point2<N>,
     pub p1: Point2<N>,
     pub p2: Point2<N>,
@@ -83,7 +83,7 @@ impl<N> ApproxEq<N> for Bezier<N> where N: ApproxEq<N> {
         self.p2.approx_eq_eps(&other.p2, epsilon) &&
         self.p3.approx_eq_eps(&other.p3, epsilon)
     }
-    fn approx_ulps(unused_mut: Option<Self>) -> u32 {
+    fn approx_ulps(_: Option<Self>) -> u32 {
         N::approx_ulps(None)
     }
     fn approx_eq_ulps(&self, other: &Self, ulps: u32) -> bool {
@@ -104,6 +104,7 @@ impl<N, F> Bezier<N> where F: BaseFloat
                             + Sub<Output = N>
                             + Add<Output = N>
                             + Div<Output = N> {
+    #[cfg(test)]
     fn split_using_matrix(&self, t: f32) -> (Bezier<N>, Bezier<N>) {
         // https://pomax.github.io/bezierinfo/#matrixsplit
         let t: N::Float = cast(t);
@@ -186,8 +187,9 @@ impl<N, F> Bezier<N> where F: BaseFloat
     // }
     // pub fn point_at(&self, t: f32) -> Point2<N> {
     // }
-    // pub fn bounding_box(&self) -> Rect<N> {
-    // }
+    pub fn bounding_box(&self) -> Rect<N> {
+        unimplemented!()
+    }
 
     pub fn curve_type(&self) -> CurveType {
         // https://pomax.github.io/bezierinfo/#canonical
@@ -197,10 +199,10 @@ impl<N, F> Bezier<N> where F: BaseFloat
         let _3_0: N::Float = cast(3.0);
         let _4_0: N::Float = cast(4.0);
 
-        let (mut p0, mut p1, mut p2, mut p3) = (cast::<Point2<N>, Point2<N::Float>>(self.p0),
-                                                cast::<Point2<N>, Point2<N::Float>>(self.p1),
-                                                cast::<Point2<N>, Point2<N::Float>>(self.p2),
-                                                cast::<Point2<N>, Point2<N::Float>>(self.p3));
+        let (p0, mut p1, mut p2, mut p3) = (cast::<Point2<N>, Point2<N::Float>>(self.p0),
+                                            cast::<Point2<N>, Point2<N::Float>>(self.p1),
+                                            cast::<Point2<N>, Point2<N::Float>>(self.p2),
+                                            cast::<Point2<N>, Point2<N::Float>>(self.p3));
         // Transform - to get p0 at (0, 0)
         let tr = p0.to_vector();
         //p0 = origin();
@@ -276,6 +278,7 @@ fn test_split() {
     assert_approx_eq!(pair0.1, pair1.1);
 }
 
+#[cfg(test)]
 mod benchmarks {
     use ::test::{black_box, Bencher};
     use ::Point2;
