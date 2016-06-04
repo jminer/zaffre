@@ -1,8 +1,8 @@
 
 use std::fmt::Debug;
 use std::ops::{Add, Div, Sub};
-use super::Rect;
-use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast, Point2};
+use super::{Point2, Rect};
+use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast};
 
 pub trait LargerFloat: Sized {
     type Float: BaseFloat + Cast<Self> + Cast<f32>;
