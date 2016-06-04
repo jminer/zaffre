@@ -1,7 +1,8 @@
 
-use std::ops::{Add, Sub};
+use std::fmt::Debug;
+use std::ops::{Add, Div, Sub};
 use super::Rect;
-use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast, Point2, Vector2};
+use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast, Point2};
 
 trait LargerFloat: Sized {
     type Float: BaseFloat + Cast<Self> + Cast<f32>;
@@ -30,6 +31,14 @@ impl LargerFloat for i64 {
 }
 impl LargerFloat for u64 {
     type Float = f64;
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum CurveType {
+	Plain,
+	SingleInflection,
+	DoubleInflection,
+	FormsLoop,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -87,12 +96,14 @@ impl<N> ApproxEq<N> for Bezier<N> where N: ApproxEq<N> {
 
 impl<N, F> Bezier<N> where F: BaseFloat
                             + Cast<N>
-                            + Cast<f32>,
+                            + Cast<f32>
+                            + Debug,
                            N: Copy
                             + Cast<F>
                             + LargerFloat<Float = F>
                             + Sub<Output = N>
-                            + Add<Output = N> {
+                            + Add<Output = N>
+                            + Div<Output = N> {
     fn split_using_matrix(&self, t: f32) -> (Bezier<N>, Bezier<N>) {
         // https://pomax.github.io/bezierinfo/#matrixsplit
         let t: N::Float = cast(t);
@@ -177,6 +188,81 @@ impl<N, F> Bezier<N> where F: BaseFloat
     // }
     // pub fn bounding_box(&self) -> Rect<N> {
     // }
+
+    pub fn curve_type(&self) -> CurveType {
+        // https://pomax.github.io/bezierinfo/#canonical
+        let _0_0: N::Float = cast(0.0);
+        let _1_0: N::Float = cast(1.0);
+        let _2_0: N::Float = cast(2.0);
+        let _3_0: N::Float = cast(3.0);
+        let _4_0: N::Float = cast(4.0);
+
+        let (mut p0, mut p1, mut p2, mut p3) = (cast::<Point2<N>, Point2<N::Float>>(self.p0),
+                                                cast::<Point2<N>, Point2<N::Float>>(self.p1),
+                                                cast::<Point2<N>, Point2<N::Float>>(self.p2),
+                                                cast::<Point2<N>, Point2<N::Float>>(self.p3));
+        // Transform - to get p0 at (0, 0)
+        let tr = p0.to_vector();
+        //p0 = origin();
+        p1 -= tr;
+        p2 -= tr;
+        p3 -= tr;
+
+/*
+        // Shear - to get p1 at (0, some value)
+        // This might be clearer using matrices, but probably not as fast.
+        let s = -p1.x / p1.y;
+        // p0.x is already 0
+        p1.x = _0_0; // += s * p1.y;
+        p2.x += s * p2.y;
+        p3.x += s * p3.y;
+
+        // Scale - to get p1 at (0, 1) and p2 at (1, some value)
+        let sx = _1_0 / p2.x;
+        let sy = _1_0 / p1.y;
+        // p0 and p1.x are 0
+        p1.y = _1_0; // *= sy;
+        p2.x = _1_0; // *= sx;
+        p2.y *= sy;
+        p3.x *= sx;
+        p3.y *= sy;
+
+        // Shear - to get p2 at (1, 1)
+        let s = (_1_0 - p2.y) / p2.x;
+        // all are already in place except for the following
+        p2.y = _1_0; // += s * p2.x;
+        p3.y += s * p3.x;
+*/
+        let f2d1 = p2.y / p1.y;
+        let f3d1 = p3.y / p1.y;
+        let p3x = (p3.x - p1.x * f3d1) / (p2.x - p1.x * f2d1);
+        let p3y = f3d1 + (_1_0 - f2d1) * p3x;
+        //println!("x: {:?}, y: {:?}", p3x, p3y);
+
+        if p3y >= _1_0 {
+            return CurveType::SingleInflection;
+        }
+        if p3x > _1_0 {
+            return CurveType::Plain;
+        }
+
+        let y = if p3x > _0_0 {
+            ((_3_0 * (_4_0 * p3x - p3x * p3x)).sqrt() - p3x) / _2_0
+        } else {
+            (-p3x * p3x + _3_0 * p3x) / _3_0
+        };
+
+        if p3y < y {
+            CurveType::Plain
+        } else {
+            let y = (-p3x * p3x + _2_0 * p3x + _3_0) / _4_0;
+            if p3y <= y {
+                CurveType::FormsLoop
+            } else {
+                CurveType::DoubleInflection
+            }
+        }
+    }
 }
 
 #[test]
@@ -260,4 +346,75 @@ mod benchmarks {
             black_box(bez0.split_using_de_casteljau(black_box(0.5)));
         });
     }
+}
+
+#[test]
+fn test_curve_type() {
+    // Interactive bezier curve at https://pomax.github.io/bezierinfo/#canonical
+    let bez = Bezier::new(Point2::new(30.0, 350.0),
+                          Point2::new(135.0, 210.0),
+                          Point2::new(275.0, 176.0),
+                          Point2::new(220.0, 40.0));
+    assert_eq!(bez.curve_type(), CurveType::SingleInflection);
+
+    let bez = Bezier::new(Point2::new(290.0, 370.0),
+                          Point2::new(135.0, 210.0),
+                          Point2::new(275.0, 176.0),
+                          Point2::new(220.0, 40.0));
+    assert_eq!(bez.curve_type(), CurveType::SingleInflection);
+
+    let bez = Bezier::new(Point2::new(140.0, 350.0),
+                          Point2::new(135.0, 210.0),
+                          Point2::new(275.0, 176.0),
+                          Point2::new(220.0, 40.0));
+    assert_eq!(bez.curve_type(), CurveType::SingleInflection);
+
+    let bez = Bezier::new(Point2::new(140.0, 350.0),
+                          Point2::new(135.0, 210.0),
+                          Point2::new(275.0, 176.0),
+                          Point2::new(220.0, 40.0));
+    assert_eq!(bez.curve_type(), CurveType::SingleInflection);
+
+    // fourth point with 0 < x < 1
+    let bez = Bezier::new(Point2::new(135.0, 35.0),
+                          Point2::new(135.0, 210.0),
+                          Point2::new(275.0, 176.0),
+                          Point2::new(220.0, 40.0));
+    assert_eq!(bez.curve_type(), CurveType::Plain);
+
+    // fourth point with 0 < x < 1
+    let bez = Bezier::new(Point2::new(135.0, 35.0),
+                          Point2::new(135.0, 210.0),
+                          Point2::new(275.0, 176.0),
+                          Point2::new(155.0, 150.0));
+    assert_eq!(bez.curve_type(), CurveType::FormsLoop);
+
+    // fourth point with 0 < x < 1
+    let bez = Bezier::new(Point2::new(135.0, 35.0),
+                          Point2::new(135.0, 210.0),
+                          Point2::new(275.0, 176.0),
+                          Point2::new(151.0, 188.0));
+    assert_eq!(bez.curve_type(), CurveType::DoubleInflection);
+
+    // fourth point with x < 0
+    let bez = Bezier::new(Point2::new(200.0, 130.0),
+                          Point2::new(135.0, 210.0),
+                          Point2::new(275.0, 176.0),
+                          Point2::new(220.0, 40.0));
+    assert_eq!(bez.curve_type(), CurveType::Plain);
+
+    // fourth point with x < 0
+    let bez = Bezier::new(Point2::new(260.0, 80.0),
+                          Point2::new(135.0, 210.0),
+                          Point2::new(275.0, 176.0),
+                          Point2::new(220.0, 40.0));
+    assert_eq!(bez.curve_type(), CurveType::FormsLoop);
+
+    // fourth point with x < 0
+    let bez = Bezier::new(Point2::new(380.0, 50.0),
+                          Point2::new(135.0, 210.0),
+                          Point2::new(275.0, 176.0),
+                          Point2::new(220.0, 40.0));
+    assert_eq!(bez.curve_type(), CurveType::DoubleInflection);
+
 }
