@@ -288,30 +288,30 @@ mod benchmarks {
     fn bench_split_using_matrix(b: &mut Bencher) {
         b.iter(|| {
             let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.0)),
-                                black_box(Point2::new(10.0, 30.0)),
-                                black_box(Point2::new(50.0, 30.0)),
-                                black_box(Point2::new(60.0, 10.0)));
+                                   black_box(Point2::new(10.0, 30.0)),
+                                   black_box(Point2::new(50.0, 30.0)),
+                                   black_box(Point2::new(60.0, 10.0)));
 
             black_box(bez0.split_using_matrix(black_box(0.5)));
 
             let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.1)),
-                                black_box(Point2::new(10.0, 30.0)),
-                                black_box(Point2::new(50.0, 30.0)),
-                                black_box(Point2::new(60.0, 10.0)));
+                                   black_box(Point2::new(10.0, 30.0)),
+                                   black_box(Point2::new(50.0, 30.0)),
+                                   black_box(Point2::new(60.0, 10.0)));
 
             black_box(bez0.split_using_matrix(black_box(0.5)));
 
             let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.2)),
-                                black_box(Point2::new(10.0, 30.0)),
-                                black_box(Point2::new(50.0, 30.0)),
-                                black_box(Point2::new(60.0, 10.0)));
+                                   black_box(Point2::new(10.0, 30.0)),
+                                   black_box(Point2::new(50.0, 30.0)),
+                                   black_box(Point2::new(60.0, 10.0)));
 
             black_box(bez0.split_using_matrix(black_box(0.5)));
 
             let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.3)),
-                                black_box(Point2::new(10.0, 30.0)),
-                                black_box(Point2::new(50.0, 30.0)),
-                                black_box(Point2::new(60.0, 10.0)));
+                                   black_box(Point2::new(10.0, 30.0)),
+                                   black_box(Point2::new(50.0, 30.0)),
+                                   black_box(Point2::new(60.0, 10.0)));
 
             black_box(bez0.split_using_matrix(black_box(0.5)));
         });
@@ -321,30 +321,30 @@ mod benchmarks {
     fn bench_split_using_de_casteljau(b: &mut Bencher) {
         b.iter(|| {
             let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.0)),
-                                black_box(Point2::new(10.0, 30.0)),
-                                black_box(Point2::new(50.0, 30.0)),
-                                black_box(Point2::new(60.0, 10.0)));
+                                   black_box(Point2::new(10.0, 30.0)),
+                                   black_box(Point2::new(50.0, 30.0)),
+                                   black_box(Point2::new(60.0, 10.0)));
 
             black_box(bez0.split_using_de_casteljau(black_box(0.5)));
 
             let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.1)),
-                                black_box(Point2::new(10.0, 30.0)),
-                                black_box(Point2::new(50.0, 30.0)),
-                                black_box(Point2::new(60.0, 10.0)));
+                                   black_box(Point2::new(10.0, 30.0)),
+                                   black_box(Point2::new(50.0, 30.0)),
+                                   black_box(Point2::new(60.0, 10.0)));
 
             black_box(bez0.split_using_de_casteljau(black_box(0.5)));
 
             let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.2)),
-                                black_box(Point2::new(10.0, 30.0)),
-                                black_box(Point2::new(50.0, 30.0)),
-                                black_box(Point2::new(60.0, 10.0)));
+                                   black_box(Point2::new(10.0, 30.0)),
+                                   black_box(Point2::new(50.0, 30.0)),
+                                   black_box(Point2::new(60.0, 10.0)));
 
             black_box(bez0.split_using_de_casteljau(black_box(0.5)));
 
             let bez0 = Bezier::new(black_box(Point2::new(5.0, 10.3)),
-                                black_box(Point2::new(10.0, 30.0)),
-                                black_box(Point2::new(50.0, 30.0)),
-                                black_box(Point2::new(60.0, 10.0)));
+                                   black_box(Point2::new(10.0, 30.0)),
+                                   black_box(Point2::new(50.0, 30.0)),
+                                   black_box(Point2::new(60.0, 10.0)));
 
             black_box(bez0.split_using_de_casteljau(black_box(0.5)));
         });
