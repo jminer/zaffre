@@ -210,31 +210,6 @@ impl<N, F> Bezier<N> where F: BaseFloat
         p2 -= tr;
         p3 -= tr;
 
-/*
-        // Shear - to get p1 at (0, some value)
-        // This might be clearer using matrices, but probably not as fast.
-        let s = -p1.x / p1.y;
-        // p0.x is already 0
-        p1.x = _0_0; // += s * p1.y;
-        p2.x += s * p2.y;
-        p3.x += s * p3.y;
-
-        // Scale - to get p1 at (0, 1) and p2 at (1, some value)
-        let sx = _1_0 / p2.x;
-        let sy = _1_0 / p1.y;
-        // p0 and p1.x are 0
-        p1.y = _1_0; // *= sy;
-        p2.x = _1_0; // *= sx;
-        p2.y *= sy;
-        p3.x *= sx;
-        p3.y *= sy;
-
-        // Shear - to get p2 at (1, 1)
-        let s = (_1_0 - p2.y) / p2.x;
-        // all are already in place except for the following
-        p2.y = _1_0; // += s * p2.x;
-        p3.y += s * p3.x;
-*/
         let f2d1 = p2.y / p1.y;
         let f3d1 = p3.y / p1.y;
         let p3x = (p3.x - p1.x * f3d1) / (p2.x - p1.x * f2d1);
