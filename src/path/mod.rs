@@ -4,7 +4,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use coordinates::*;
 use super::Point2;
-use nalgebra::Vector2;
+use nalgebra::{origin, Vector2};
+
+mod glium_backend;
 
 pub struct ArcSegment {
 	center_pt: Point2<f32>,
@@ -49,8 +51,14 @@ pub enum JoinStyle {
     MiterTruncate(f32), // default for Flash, XPS, and Qt
 }
 
+#[derive(Debug, Copy, Clone)]
+struct SolidVertex {
+	position: (f32, f32),
+}
+
+#[derive(Debug, Copy, Clone)]
 struct QuadBezierVertex {
-	position: f32,
+	position: (f32, f32),
 }
 
 struct Geometry<T> {
@@ -59,18 +67,29 @@ struct Geometry<T> {
 }
 
 struct BakedStroke {
-	solid_geo: Geometry<f32>,
+	solid_geo: Geometry<SolidVertex>,
 	//quad_bezier_geo: Geometry<StrokeQuadBezierVertex>,
 	backend: HashMap<usize, Arc<Any>>,
 }
 
 struct BakedFill {
-	solid_geo: Geometry<f32>,
+	solid_geo: Geometry<SolidVertex>,
 	//quad_bezier_geo: Geometry<FillQuadBezierVertex>,
 	//cubic_bezier_geo: Geometry<FillCubicBezierVertex>,
 	backend: HashMap<usize, Arc<Any>>,
 }
 
+// It would probably make sense to separate out stuff into another type: BakedStrokedPath. When
+// you create it, you specify:
+// - the stroke width
+// - the dash pattern
+// - the end cap
+// - the dash cap
+// - the join style
+// and then they are immutable. That would make the cost of changing them clear. And if you only
+// are filling a path, you don't have those settings available. Would make the API more stateless.
+// There should also be a BakedFilledPath. I don't think filling has any settings that affect the
+// baking. The fill mode should be a parameter to stencil_fill_path().
 pub struct PathBuf {
 	// stored in separate arrays for memory efficiency
     seg_types: Vec<PathSegmentType>,
@@ -81,6 +100,7 @@ pub struct PathBuf {
 	// terminal_dash_cap: EndCap,
 	join_style: JoinStyle,
 
+    // TODO: I have to clear the baked data, including the backend data, when the path is changed.
 	baked_stroke: Option<BakedStroke>,
 	baked_fill: Option<BakedFill>,
 }

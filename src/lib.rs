@@ -2,6 +2,8 @@
 extern crate test;
 
 #[macro_use]
+extern crate glium;
+#[macro_use]
 extern crate nalgebra;
 extern crate num;
 

@@ -8,5 +8,6 @@ keywords = ["2d", "graphics"]
 license = "MPL-2.0"
 
 [dependencies]
+glium = "0.14.0"
 nalgebra = "0.8.2"
 num = "0.1.32"
