@@ -35,10 +35,10 @@ impl LargerFloat for u64 {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum CurveType {
-	Plain,
-	SingleInflection,
-	DoubleInflection,
-	FormsLoop,
+    Plain,
+    SingleInflection,
+    DoubleInflection,
+    FormsLoop,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
