@@ -1,12 +1,25 @@
 
+use std::any::Any;
+use std::collections::HashMap;
+use std::sync::Arc;
 use coordinates::*;
 use super::Point2;
+use nalgebra::Vector2;
 
-pub enum PathSegment<N> {
-	Move(Point2<N>),
-	Line(Point2<N>),
-	QuadCurve(Point2<N>, Point2<N>), // cairo doesn't have quad, but D2D, Skia, and NVpr do
-	CubicCurve(Point2<N>, Point2<N>, Point2<N>),
+pub struct ArcSegment {
+	center_pt: Point2<f32>,
+	x_radius: f32,
+	y_radius: f32,
+	angle1: f32,
+	angle2: f32,
+}
+
+pub enum PathSegment {
+	Move(Point2<f32>),
+	Line(Point2<f32>),
+	QuadCurve(Point2<f32>, Point2<f32>), // cairo doesn't have quad, but D2D, Skia, and NVpr do
+	CubicCurve(Point2<f32>, Point2<f32>, Point2<f32>),
+	Arc(ArcSegment),
 	Close,
 }
 
@@ -15,6 +28,7 @@ enum PathSegmentType { // smaller than a PathSegment
     Line,
     QuadCurve,
     CubicCurve,
+	Arc,
     Close,
 }
 
@@ -47,18 +61,20 @@ struct Geometry<T> {
 struct BakedStroke {
 	solid_geo: Geometry<f32>,
 	//quad_bezier_geo: Geometry<StrokeQuadBezierVertex>,
-	//backend: HashMap<BackendType, BackendBakedStroke>,
+	backend: HashMap<usize, Arc<Any>>,
 }
 
 struct BakedFill {
 	solid_geo: Geometry<f32>,
 	//quad_bezier_geo: Geometry<FillQuadBezierVertex>,
 	//cubic_bezier_geo: Geometry<FillCubicBezierVertex>,
+	backend: HashMap<usize, Arc<Any>>,
 }
 
 pub struct PathBuf {
+	// stored in separate arrays for memory efficiency
     seg_types: Vec<PathSegmentType>,
-    pts: Vec<Point2<f32>>,
+    seg_data: Vec<f32>,
 	initial_end_cap: EndCap,
 	terminal_end_cap: EndCap,
 	// initial_dash_cap: EndCap,
@@ -73,12 +89,22 @@ impl PathBuf {
 	pub fn new() -> PathBuf {
 		PathBuf {
 			seg_types: vec![],
-			pts: vec![],
+			seg_data: vec![],
 			initial_end_cap: EndCap::Flat,
 			terminal_end_cap: EndCap::Flat,
 			join_style: JoinStyle::MiterRevert(4.0),
 			baked_stroke: None,
 			baked_fill: None,
+		}
+	}
+
+	pub fn segments(&self) -> PathSegments {
+		PathSegments {
+			types: &self.seg_types,
+			data: &self.seg_data,
+
+			types_index: 0,
+			data_index: 0,
 		}
 	}
 
@@ -122,9 +148,18 @@ impl PathBuf {
 	    if self.seg_types.is_empty() {
 	        return None;
 	    }
+		let dlen = self.seg_data.len();
 	    match self.seg_types[self.seg_types.len() - 1] {
 	        PathSegmentType::Close => None,
-	        _ => Some(self.pts[self.pts.len() - 1])
+	        PathSegmentType::Arc => {
+				let mut center = Point2::new(self.seg_data[dlen - 6], self.seg_data[dlen - 5]);
+				// https://en.wikipedia.org/wiki/Ellipse#Equations
+				let angle2 = self.seg_data[dlen - 1];
+				center += Vector2::new(self.seg_data[dlen - 4] * angle2.cos(),
+				                       self.seg_data[dlen - 3] * angle2.sin());
+				Some(center)
+			},
+	        _ => Some(Point2::new(self.seg_data[dlen - 2], self.seg_data[dlen - 1]))
 	    }
 	}
 	// pub fn iter() -> Iterator {
@@ -156,3 +191,64 @@ impl PathBuf {
 	}
 }
 
+pub struct PathSegments<'a> {
+    types: &'a Vec<PathSegmentType>,
+    data: &'a Vec<f32>,
+
+	types_index: usize,
+	data_index: usize,
+}
+
+impl<'a> Iterator for PathSegments<'a> {
+	type Item = PathSegment;
+
+	fn next(&mut self) -> Option<PathSegment> {
+		if self.types_index == self.types.len() {
+			return None;
+		}
+
+		let di = self.data_index;
+		let types_index = self.types_index;
+		self.types_index += 1;
+		Some(match self.types[types_index] {
+			PathSegmentType::Move => {
+				let s = PathSegment::Move(Point2::new(self.data[di], self.data[di + 1]));
+				self.data_index += 2;
+				s
+			},
+			PathSegmentType::Line => {
+				let s = PathSegment::Line(Point2::new(self.data[di], self.data[di + 1]));
+				self.data_index += 2;
+				s
+			},
+			PathSegmentType::QuadCurve => {
+				let s = PathSegment::QuadCurve(Point2::new(self.data[di    ], self.data[di + 1]),
+				                               Point2::new(self.data[di + 2], self.data[di + 3]));
+				self.data_index += 4;
+				s
+			},
+			PathSegmentType::CubicCurve => {
+				let s = PathSegment::CubicCurve(Point2::new(self.data[di    ], self.data[di + 1]),
+				                                Point2::new(self.data[di + 2], self.data[di + 3]),
+				                                Point2::new(self.data[di + 4], self.data[di + 5]));
+				self.data_index += 6;
+				s
+			},
+			PathSegmentType::Arc => {
+				let s = PathSegment::Arc(ArcSegment {
+					center_pt: Point2::new(self.data[di], self.data[di + 1]),
+					x_radius: self.data[di + 2],
+					y_radius: self.data[di + 3],
+					angle1: self.data[di + 4],
+					angle2: self.data[di + 5],
+				});
+				self.data_index += 6;
+				s
+			},
+			PathSegmentType::Close => {
+				let s = PathSegment::Close;
+				s
+			},
+		})
+	}
+}
