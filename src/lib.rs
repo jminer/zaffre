@@ -14,4 +14,4 @@ mod path;
 pub use nalgebra::Point2;
 pub use bezier::{Bezier, CurveType};
 pub use coordinates::{Size2, Rect, BorderSize2};
-pub use path::{PathSegment, PathBuf};
+pub use path::{PathSegment, PathBuf, stencil_stroke_path};

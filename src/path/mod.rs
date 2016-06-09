@@ -4,9 +4,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use coordinates::*;
 use super::Point2;
-use nalgebra::{origin, Vector2};
+use nalgebra::{origin, Norm, Vector2};
 
 mod glium_backend;
+
+pub use self::glium_backend::{stencil_stroke_path};
 
 pub struct ArcSegment {
 	center_pt: Point2<f32>,
@@ -61,25 +63,28 @@ struct QuadBezierVertex {
 	position: (f32, f32),
 }
 
+#[derive(Debug)]
 struct Geometry<T> {
 	vertices: Vec<T>,
 	indices: Vec<u16>,
 }
 
+#[derive(Debug)]
 struct BakedStroke {
 	solid_geo: Geometry<SolidVertex>,
 	//quad_bezier_geo: Geometry<StrokeQuadBezierVertex>,
-	backend: HashMap<usize, Arc<Any>>,
+	backend: HashMap<usize, Box<Any>>,
 }
 
+#[derive(Debug)]
 struct BakedFill {
 	solid_geo: Geometry<SolidVertex>,
 	//quad_bezier_geo: Geometry<FillQuadBezierVertex>,
 	//cubic_bezier_geo: Geometry<FillCubicBezierVertex>,
-	backend: HashMap<usize, Arc<Any>>,
+	backend: HashMap<usize, Box<Any>>,
 }
 
-// It would probably make sense to separate out stuff into another type: BakedStrokedPath. When
+// It may make sense to separate out stuff into another type: BakedStrokedPath or BakedStroke. When
 // you create it, you specify:
 // - the stroke width
 // - the dash pattern
@@ -90,10 +95,14 @@ struct BakedFill {
 // are filling a path, you don't have those settings available. Would make the API more stateless.
 // There should also be a BakedFilledPath. I don't think filling has any settings that affect the
 // baking. The fill mode should be a parameter to stencil_fill_path().
+// Something to keep in mind is I may want to be able to change a path and update the baked
+// data without recreating it all from scratch. They might need to be one object in that case?
 pub struct PathBuf {
 	// stored in separate arrays for memory efficiency
     seg_types: Vec<PathSegmentType>,
     seg_data: Vec<f32>,
+
+    stroke_width: f32,
 	initial_end_cap: EndCap,
 	terminal_end_cap: EndCap,
 	// initial_dash_cap: EndCap,
@@ -110,9 +119,12 @@ impl PathBuf {
 		PathBuf {
 			seg_types: vec![],
 			seg_data: vec![],
+
+            stroke_width: 1.0,
 			initial_end_cap: EndCap::Flat,
 			terminal_end_cap: EndCap::Flat,
 			join_style: JoinStyle::MiterRevert(4.0),
+
 			baked_stroke: None,
 			baked_fill: None,
 		}
@@ -129,12 +141,19 @@ impl PathBuf {
 	}
 
 	pub fn move_to(&mut self, pt: Point2<f32>) {
+        self.seg_types.push(PathSegmentType::Move);
+        self.seg_data.push(pt.x);
+        self.seg_data.push(pt.y);
 	}
 
 	pub fn rel_move_to(&mut self, pt: Point2<f32>) {
 	}
 
 	pub fn line_to(&mut self, pt: Point2<f32>) {
+        self.current_point().expect("line_to requires a current point");
+        self.seg_types.push(PathSegmentType::Line);
+        self.seg_data.push(pt.x);
+        self.seg_data.push(pt.y);
 	}
 
 	pub fn rel_line_to(&mut self, pt: Point2<f32>) {
@@ -190,8 +209,13 @@ impl PathBuf {
 	// pub fn from_svg_path_string(path_string: &str);
 	// pub fn from_postscript_path_string(path_string: &str);
 
-	// pub fn stroke_width(&self) -> f32;
-	// pub fn set_stroke_width(&mut self, width: f32);
+	pub fn stroke_width(&self) -> f32 {
+        self.stroke_width
+    }
+	pub fn set_stroke_width(&mut self, width: f32) {
+        self.stroke_width = width;
+        // TODO: erase baked paths
+    }
 
 	// pub fn mask(&self) -> u32;
 	// pub fn set_mask(&mut self, mask: u32);
@@ -203,6 +227,60 @@ impl PathBuf {
 	// pub fn point_at_distance(segments: Range<usize>, distance: f32) -> (Point, f32, f32);
 
 	fn bake_stroke(&mut self) {
+        let mut vertices = vec![];
+        let mut indices = vec![];
+        let mut curr_pt = None;
+        let mut curr_dir = None;
+        for seg in self.segments() {
+            match seg {
+                PathSegment::Move(pt) => {
+                    curr_pt = Some(pt);
+                },
+                PathSegment::Line(end_pt) => {
+                    let start_pt: Point2<f32> = curr_pt.expect("line segment requires current point");
+                    let new_dir: Vector2<f32> = end_pt - start_pt;
+                    let left_dir = Vector2::new(-new_dir.y, new_dir.x); // rotate 90 CCW
+                    let scale_to_width = left_dir.norm().recip() * self.stroke_width / 2.0;
+                    let left_dir = left_dir * scale_to_width;
+                    let right_dir = -left_dir;
+
+                    let start_index = vertices.len();
+                    let vert = start_pt + left_dir; // start left
+                    vertices.push(SolidVertex {
+                        position: (vert.x, vert.y)
+                    });
+                    let vert = start_pt + right_dir; // start right
+                    vertices.push(SolidVertex {
+                        position: (vert.x, vert.y)
+                    });
+                    let vert = end_pt + left_dir; // end left
+                    vertices.push(SolidVertex {
+                        position: (vert.x, vert.y)
+                    });
+                    let vert = end_pt + right_dir; // end right
+                    vertices.push(SolidVertex {
+                        position: (vert.x, vert.y)
+                    });
+                    indices.push((start_index + 0) as u16);
+                    indices.push((start_index + 2) as u16);
+                    indices.push((start_index + 1) as u16);
+                    indices.push((start_index + 1) as u16);
+                    indices.push((start_index + 2) as u16);
+                    indices.push((start_index + 3) as u16);
+
+                    curr_pt = Some(end_pt);
+                    curr_dir = Some(new_dir);
+                },
+                _ => unimplemented!(),
+            }
+        }
+        self.baked_stroke = Some(BakedStroke {
+            solid_geo: Geometry {
+                vertices: vertices,
+                indices: indices,
+            },
+            backend: HashMap::new(),
+        });
 
 	}
 

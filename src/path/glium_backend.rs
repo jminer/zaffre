@@ -8,6 +8,7 @@ use glium::framebuffer::{RenderBuffer, SimpleFrameBuffer};
 use glium::texture::UncompressedFloatFormat;
 use glium::vertex::VertexBuffer;
 use glium::index::{IndexBuffer, PrimitiveType};
+use nalgebra::{Matrix4, Similarity2, Transpose, Vector1, Vector2};
 use super::{PathBuf, SolidVertex};
 
 implement_vertex!(SolidVertex, position);
@@ -33,20 +34,20 @@ fn build_stroke_cache<F>(facade: &F, path: &mut PathBuf) -> Arc<GliumStrokeCache
     // unwrap() can't panic because of bake_stroke()
     let mut baked_stroke = path.baked_stroke.as_mut().unwrap();
     let solid_geo = &baked_stroke.solid_geo;
-    let cache = baked_stroke.backend.entry(context as *const _ as usize).or_insert_with(|| {
-        Arc::new(GliumStrokeCache {
+    let cache: &Box<Any> = baked_stroke.backend.entry(context as *const _ as usize).or_insert_with(|| {
+        Box::new(Arc::new(GliumStrokeCache {
             solid: GliumBufferCache {
                 vertex_buffer: VertexBuffer::new(facade, &solid_geo.vertices).unwrap(),
                 index_buffer: IndexBuffer::new(facade,
                                                PrimitiveType::TrianglesList,
                                                &solid_geo.indices).unwrap(),
             },
-        }) as Arc<Any>
+        })) as Box<Any>
     });
     cache.downcast_ref::<Arc<GliumStrokeCache>>().unwrap().clone()
 }
 
-pub fn stencil_stroke_path<F, S>(facade: &F, mut surface: S, path: &mut PathBuf)
+pub fn stencil_stroke_path<F, S>(facade: &F, surface: &mut S, path: &mut PathBuf, transform: &Matrix4<f32>)
                                  where F: glium::backend::Facade,
                                        S: Surface {
     assert!(surface.has_stencil_buffer());
@@ -60,12 +61,25 @@ pub fn stencil_stroke_path<F, S>(facade: &F, mut surface: S, path: &mut PathBuf)
                                                              STROKE_SOLID_FRAG_SHADER,
                                                              None).unwrap();
 
+    let uniforms = uniform! {
+        // The transpose() is needed because nalgebra stores the first row, then the second row,
+        // etc. OpenGL expects the first column, then the second column, etc.
+        // (row-major vs column major)
+        transform: *transform.transpose().as_ref(),
+    };
     let draw_params = glium::draw_parameters::DrawParameters {
+        stencil: glium::draw_parameters::Stencil {
+            reference_value_clockwise: 1,
+            depth_pass_operation_clockwise: glium::StencilOperation::Replace,
+            reference_value_counter_clockwise: 1,
+            depth_pass_operation_counter_clockwise: glium::StencilOperation::Replace,
+            .. Default::default()
+        },
         color_mask: (false, false, false, false),
         .. Default::default()
     };
     surface.draw(&cache.solid.vertex_buffer, &cache.solid.index_buffer, &solid_program,
-    &glium::uniforms::EmptyUniforms, &draw_params).unwrap();
+    &uniforms, &draw_params).unwrap();
 }
 
 // not sure covering is necessary
