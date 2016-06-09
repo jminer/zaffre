@@ -25,7 +25,7 @@ fn main() {
     let display = glutin::WindowBuilder::new()
                   .with_dimensions(850, 480)
                   .with_title(String::from("Test"))
-                  .with_multisampling(4)
+                  .with_multisampling(8)
                   //.with_vsync()
                   .build_glium()
                   .unwrap();
@@ -35,9 +35,9 @@ fn main() {
     path.set_stroke_width(20.0);
     // path.move_to(Point2::new(20.0, 10.0));
     // path.line_to(Point2::new(40.0, 15.0));
-    path.move_to(Point2::new(-20.0, -20.0));
-    path.line_to(Point2::new(30.0, 30.0));
-    path.line_to(Point2::new(30.0, 50.0));
+    path.move_to(Point2::new(10.0, 20.0));
+    path.line_to(Point2::new(80.0, 30.0));
+    path.line_to(Point2::new(40.0, 50.0));
 
     let vertices = &[
         Vertex { position: (-1.0,  1.0, 0.0) },
@@ -57,10 +57,14 @@ fn main() {
                                             .expect("failed getting window size");
 
         let mut transform = Matrix4::one();
-        transform.m11 = (win_width as f32).recip();
-        transform.m22 = (win_height as f32).recip();
-        transform.m41 = 0.3;
-        transform.m42 = 0.3;
+        // scale -1.0 .. 1.0 to -window_width/2 .. window_width/2
+        // The starting range is 2.0 and the ending range is win_width.
+        // Also, flip Y.
+        transform.m11 = 2.0 / (win_width as f32);
+        transform.m22 = -2.0 / (win_height as f32);
+        // Translate (0, 0) to the top left of the screen.
+        transform.m41 = -1.0;
+        transform.m42 = 1.0;
         // println!("transf: {:#?}", transform);
         // println!("pt: {:#?}", nalgebra::Point4::new(20.0f32, 30.0, 0.0, 1.0));
 
