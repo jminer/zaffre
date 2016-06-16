@@ -1,0 +1,80 @@
+
+use std::fmt::Debug;
+use std::ops::{Add, Div, Sub};
+use super::{Point2, Rect, LargerFloat};
+use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast};
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct QuadBezier<N> {
+    pub p0: Point2<N>,
+    pub p1: Point2<N>,
+    pub p2: Point2<N>,
+}
+
+impl<N> QuadBezier<N> {
+    pub fn new(p0: Point2<N>, p1: Point2<N>, p2: Point2<N>) -> Self {
+        QuadBezier {
+            p0: p0,
+            p1: p1,
+            p2: p2,
+        }
+    }
+}
+
+
+impl<Nin: Copy, Nout: Copy + Cast<Nin>> Cast<QuadBezier<Nin>> for QuadBezier<Nout> {
+    fn from(bezier: QuadBezier<Nin>) -> QuadBezier<Nout> {
+        QuadBezier {
+            p0: cast(bezier.p0),
+            p1: cast(bezier.p1),
+            p2: cast(bezier.p2),
+        }
+    }
+}
+
+impl<N> ApproxEq<N> for QuadBezier<N> where N: ApproxEq<N> {
+    fn approx_epsilon(_: Option<Self>) -> N {
+        N::approx_epsilon(None)
+    }
+
+    fn approx_eq_eps(&self, other: &Self, epsilon: &N) -> bool {
+        self.p0.approx_eq_eps(&other.p0, epsilon) &&
+        self.p1.approx_eq_eps(&other.p1, epsilon) &&
+        self.p2.approx_eq_eps(&other.p2, epsilon)
+    }
+    fn approx_ulps(_: Option<Self>) -> u32 {
+        N::approx_ulps(None)
+    }
+    fn approx_eq_ulps(&self, other: &Self, ulps: u32) -> bool {
+        self.p0.approx_eq_ulps(&other.p0, ulps) &&
+        self.p1.approx_eq_ulps(&other.p1, ulps) &&
+        self.p2.approx_eq_ulps(&other.p2, ulps)
+    }
+}
+
+impl<N, F> QuadBezier<N> where F: BaseFloat
+                                + Cast<N>
+                                + Cast<f32>
+                                + Debug,
+                               N: Copy
+                                + Cast<F>
+                                + LargerFloat<Float = F>
+                                + Sub<Output = N>
+                                + Add<Output = N>
+                                + Div<Output = N> {
+
+    pub fn point_at(&self, t: f32) -> Point2<N> {
+        let _1_0: N::Float = cast(1.0);
+        let _2_0: N::Float = cast(2.0);
+        let t: N::Float = cast(t);
+        let (p0, p1, p2) = (cast::<Point2<N>, Point2<N::Float>>(self.p0),
+                            cast::<Point2<N>, Point2<N::Float>>(self.p1),
+                            cast::<Point2<N>, Point2<N::Float>>(self.p2));
+
+        let one_m_t = _1_0 - t;
+
+        let p1 = p1.to_vector();
+        let p2 = p2.to_vector();
+        cast(p0 * one_m_t * one_m_t + p1 * _2_0 * one_m_t * t + p2 * t * t)
+    }
+}
