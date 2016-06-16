@@ -78,3 +78,16 @@ impl<N, F> QuadBezier<N> where F: BaseFloat
         cast(p0 * one_m_t * one_m_t + p1 * _2_0 * one_m_t * t + p2 * t * t)
     }
 }
+
+#[test]
+fn test_point_at() {
+    let bez = QuadBezier::new(Point2::new(220.0, 40.0),
+                              Point2::new(50.0, 180.0),
+                              Point2::new(135.0, 210.0));
+
+    assert_approx_eq!(bez.point_at(0.0), Point2::new(220.0, 40.0));
+    assert_approx_eq!(bez.point_at(1.0), Point2::new(135.0, 210.0));
+
+    assert_approx_eq!(bez.point_at(0.5), Point2::new(113.75, 152.5));
+    assert_approx_eq_eps!(bez.point_at(0.3), Point2::new(140.95, 114.1), 0.00001);
+}
