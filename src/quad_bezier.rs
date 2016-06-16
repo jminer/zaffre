@@ -1,8 +1,8 @@
 
 use std::fmt::Debug;
 use std::ops::{Add, Div, Sub};
-use super::{Point2, Rect, LargerFloat};
-use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast};
+use super::{LargerFloat, Point2, Rect, Vector2};
+use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast, Norm};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct QuadBezier<N> {
@@ -63,6 +63,16 @@ impl<N, F> QuadBezier<N> where F: BaseFloat
                                 + Add<Output = N>
                                 + Div<Output = N> {
 
+    pub fn tangent_at(&self, t: f32) -> Vector2<N> {
+        let _1_0: N::Float = cast(1.0);
+        let t: N::Float = cast(t);
+        let (p0, p1, p2) = (cast::<Point2<N>, Point2<N::Float>>(self.p0),
+                            cast::<Point2<N>, Point2<N::Float>>(self.p1),
+                            cast::<Point2<N>, Point2<N::Float>>(self.p2));
+
+        cast(((p1 - p0) * (_1_0 - t) + (p2 - p1) * t).normalize())
+    }
+
     pub fn point_at(&self, t: f32) -> Point2<N> {
         let _1_0: N::Float = cast(1.0);
         let _2_0: N::Float = cast(2.0);
@@ -90,4 +100,19 @@ fn test_point_at() {
 
     assert_approx_eq!(bez.point_at(0.5), Point2::new(113.75, 152.5));
     assert_approx_eq_eps!(bez.point_at(0.3), Point2::new(140.95, 114.1), 0.00001);
+}
+
+#[test]
+fn test_tangent_at() {
+    let bez = QuadBezier::new(Point2::new(220.0, 40.0),
+                              Point2::new(50.0, 180.0),
+                              Point2::new(135.0, 210.0));
+
+    assert_approx_eq!(bez.tangent_at(0.0).norm(), 1.0);
+    assert_approx_eq!(bez.tangent_at(0.3).norm(), 1.0);
+    assert_approx_eq!(bez.tangent_at(1.0).norm(), 1.0);
+
+    assert_approx_eq!(bez.tangent_at(0.0), Vector2::new(-170.0, 140.0).normalize());
+    assert_approx_eq!(bez.tangent_at(1.0), Vector2::new(85.0, 30.0).normalize());
+    assert_approx_eq!(bez.tangent_at(0.3), Vector2::new(-93.5, 107.0).normalize());
 }
