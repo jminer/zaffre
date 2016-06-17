@@ -160,6 +160,12 @@ impl PathBuf {
 	}
 
 	pub fn quad_curve_to(&mut self, pt1: Point2<f32>, pt2: Point2<f32>) {
+        self.current_point().expect("quad_curve_to requires a current point");
+        self.seg_types.push(PathSegmentType::QuadCurve);
+        self.seg_data.push(pt1.x);
+        self.seg_data.push(pt1.y);
+        self.seg_data.push(pt2.x);
+        self.seg_data.push(pt2.y);
 	}
 
 	pub fn rel_quad_curve_to(&mut self, pt1: Point2<f32>, pt2: Point2<f32>) {
