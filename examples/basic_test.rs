@@ -38,6 +38,7 @@ fn main() {
     path.move_to(Point2::new(10.0, 20.0));
     path.line_to(Point2::new(80.0, 30.0));
     path.line_to(Point2::new(40.0, 50.0));
+    path.quad_curve_to(Point2::new(20.0, 100.0), Point2::new(100.0, 200.0));
 
     let vertices = &[
         Vertex { position: (-1.0,  1.0, 0.0) },

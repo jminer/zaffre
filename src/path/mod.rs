@@ -3,8 +3,8 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 use coordinates::*;
-use super::Point2;
-use nalgebra::{origin, Norm, Vector2};
+use super::{Point2, QuadBezier};
+use nalgebra::{ApproxEq, Cross, origin, Norm, Vector2};
 
 mod glium_backend;
 
@@ -267,16 +267,120 @@ impl PathBuf {
                     vertices.push(SolidVertex {
                         position: (vert.x, vert.y)
                     });
+
                     indices.push((start_index + 0) as u16);
-                    indices.push((start_index + 2) as u16);
-                    indices.push((start_index + 1) as u16);
                     indices.push((start_index + 1) as u16);
                     indices.push((start_index + 2) as u16);
+
+                    indices.push((start_index + 1) as u16);
                     indices.push((start_index + 3) as u16);
+                    indices.push((start_index + 2) as u16);
 
                     curr_pt = Some(end_pt);
-                    curr_dir = Some(new_dir);
+                    curr_dir = Some(line_dir);
                 },
+                PathSegment::QuadCurve(control_pt, end_pt) => {
+                    let start_pt: Point2<f32> = curr_pt.expect("quad curve segment requires current point");
+                    let bezier = QuadBezier::new(start_pt, control_pt, end_pt);
+                    let half_stroke_width = self.stroke_width / 2.0;
+
+                    let start_dir: Vector2<f32> = (control_pt - start_pt).normalize(); // bezier.tangent_at(0.0);
+                    let end_dir: Vector2<f32> = (end_pt - control_pt).normalize(); // bezier.tangent_at(1.0);
+
+                    let start_left_dir = Vector2::new(start_dir.y, -start_dir.x); // rotate 90 CCW
+                    let start_left_dir = start_left_dir * half_stroke_width;
+                    let start_right_dir = -start_left_dir;
+
+                    let end_left_dir = Vector2::new(end_dir.y, -end_dir.x); // rotate 90 CCW
+                    let end_left_dir = end_left_dir * half_stroke_width;
+                    let end_right_dir = -end_left_dir;
+
+                    // A line tangent to a quadratic Bézier curve intersects the curve in exactly
+                    // that one point. This fact means that multiple tangent lines will bound the
+                    // curve.
+                    // (I don't know how to prove the tangent only intersect in the one point, but
+                    // I know that for the tangent to intersect in another point, the curve would
+                    // have to have an inflection point. Quadratic curves never have an inflection
+                    // point.)
+                    let mid_pt = bezier.point_at(0.5);
+                    let mid_dir = bezier.tangent_at(0.5);
+                    let mid_left_dir = Vector2::new(mid_dir.y, -mid_dir.x); // rotate 90 CCW
+                    let mid_left_dir = mid_left_dir * half_stroke_width;
+                    let mid_right_dir = -mid_left_dir;
+                    // TODO: This should maybe be configuable to be subdivided an arbitary
+                    // number of times. It would reduce the area, but I'm not sure it's
+                    // necessary.
+
+                    let curves_right = is_point_right_of_line(start_pt, control_pt, end_pt);
+
+                    // si = start inner, mo = mid outer, ei = end inner
+                    let (so_dir, si_dir, mo_dir, mi_dir, eo_dir, ei_dir) = if curves_right {
+                        (start_left_dir, start_right_dir,
+                         mid_left_dir, mid_right_dir,
+                         end_left_dir, end_right_dir)
+                    } else {
+                        (start_right_dir, start_left_dir,
+                         mid_right_dir, mid_left_dir,
+                         end_right_dir, end_left_dir)
+                    };
+                    let mid_outer_pt = mid_pt + mo_dir;
+
+                    let start_index = vertices.len();
+                    let vert = start_pt + so_dir; // start outer
+                    vertices.push(SolidVertex {
+                        position: (vert.x, vert.y)
+                    });
+                    let vert = start_pt + si_dir; // start inner
+                    vertices.push(SolidVertex {
+                        position: (vert.x, vert.y)
+                    });
+                    // The unwrap shouldn't ever fail, but it isn't worth a panic.
+                    let vert = find_intersection(start_pt, start_dir,
+                                                 mid_outer_pt, mid_dir).unwrap_or(mid_pt); // outer before mid
+                    vertices.push(SolidVertex {
+                        position: (vert.x, vert.y)
+                    });
+                    let vert = find_intersection(mid_outer_pt, mid_dir,
+                                                 end_pt, end_dir).unwrap_or(mid_pt); // outer after mid
+                    vertices.push(SolidVertex {
+                        position: (vert.x, vert.y)
+                    });
+                    let vert = mid_pt + mi_dir; // inner mid
+                    vertices.push(SolidVertex {
+                        position: (vert.x, vert.y)
+                    });
+                    let vert = end_pt + eo_dir; // end outer
+                    vertices.push(SolidVertex {
+                        position: (vert.x, vert.y)
+                    });
+                    let vert = end_pt + ei_dir; // end inner
+                    vertices.push(SolidVertex {
+                        position: (vert.x, vert.y)
+                    });
+
+                    indices.push((start_index + 0) as u16);
+                    indices.push((start_index + 1) as u16);
+                    indices.push((start_index + 2) as u16);
+
+                    indices.push((start_index + 1) as u16);
+                    indices.push((start_index + 4) as u16);
+                    indices.push((start_index + 2) as u16);
+
+                    indices.push((start_index + 2) as u16);
+                    indices.push((start_index + 4) as u16);
+                    indices.push((start_index + 3) as u16);
+
+                    indices.push((start_index + 4) as u16);
+                    indices.push((start_index + 6) as u16);
+                    indices.push((start_index + 3) as u16);
+
+                    indices.push((start_index + 3) as u16);
+                    indices.push((start_index + 6) as u16);
+                    indices.push((start_index + 5) as u16);
+
+                    curr_pt = Some(end_pt);
+                    curr_dir = Some(end_dir);
+                }
                 _ => unimplemented!(),
             }
         }
@@ -293,6 +397,57 @@ impl PathBuf {
 	fn bake_fill(&mut self) {
 
 	}
+}
+
+// Returns the point at which the two specified lines intersect. The first line passes
+// through `pt0` with the slope of `vec0`, and the second line passes through `pt1` with the
+// slope of `vec1`.
+fn find_intersection(pt0: Point2<f32>, vec0: Vector2<f32>, pt1: Point2<f32>, vec1: Vector2<f32>)
+                        -> Option<Point2<f32>> {
+    // http://stackoverflow.com/a/565282/69671
+    fn cross_vec2(v0: Vector2<f32>, v1: Vector2<f32>) -> f32 {
+        v0.x * v1.y - v0.y * v1.x
+    }
+
+    let denom = cross_vec2(vec0, vec1);
+    if denom == 0.0 {
+        return None;
+    }
+    let t = cross_vec2(pt1 - pt0, vec1) / denom;
+    // println!("pt0: {}, vec0: {}, pt1: {}, vec1: {}", pt0, vec0, pt1, vec1);
+    Some(pt0 + vec0 * t)
+}
+
+#[test]
+fn test_find_intersection() {
+    let pt = find_intersection(Point2::new(5.0f32, 8.0), Vector2::new(1.0, 0.0),
+                               Point2::new(10.0, 2.0), Vector2::new(0.0, 1.0)).unwrap();
+    assert_approx_eq!(pt, Point2::new(10.0, 8.0));
+
+    let pt = find_intersection(Point2::new(50.0f32, 50.0), Vector2::new(1.0, -1.0),
+                               Point2::new(10.0, 10.0), Vector2::new(1.0, 0.0)).unwrap();
+    assert_approx_eq!(pt, Point2::new(90.0, 10.0));
+
+    let pt = find_intersection(Point2::new(50.0f32, 50.0), Vector2::new(1.0, 1.0).normalize(),
+                               Point2::new(60.0, 50.0), Vector2::new(-1.0, 1.0).normalize()).unwrap();
+    assert_approx_eq!(pt, Point2::new(55.0, 55.0));
+}
+
+// Returns true if the point `pt` is to the right of the line passing through `line_pt0`
+// and `line_pt1`, as if the observer is at `line_pt0`.
+fn is_point_right_of_line(line_pt0: Point2<f32>, line_pt1: Point2<f32>, pt: Point2<f32>) -> bool {
+    // http://stackoverflow.com/a/3461533/69671
+    (line_pt1 - line_pt0).cross(&(pt - line_pt0)).x >= 0.0
+}
+
+#[test]
+fn test_is_point_right_of_line() {
+    assert!(is_point_right_of_line(Point2::new(5.0f32, 20.0), Point2::new(5.0, 10.0),
+                                   Point2::new(8.0, 15.0)));
+    assert!(is_point_right_of_line(Point2::new(5.0f32, 20.0), Point2::new(5.0, 10.0),
+                                   Point2::new(50.0, 15.0)));
+    assert!(!is_point_right_of_line(Point2::new(20.0f32, 20.0), Point2::new(30.0, 10.0),
+                                    Point2::new(25.0, 10.0)));
 }
 
 pub struct PathSegments<'a> {

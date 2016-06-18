@@ -12,7 +12,7 @@ mod cubic_bezier;
 mod path;
 mod quad_bezier;
 
-pub use nalgebra::Point2;
+pub use nalgebra::{Point2, Vector2};
 pub use coordinates::{Size2, Rect, BorderSize2};
 pub use cubic_bezier::{CubicBezier, CurveType};
 pub use path::{PathSegment, PathBuf, stencil_stroke_path};
