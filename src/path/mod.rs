@@ -244,8 +244,8 @@ impl PathBuf {
                 },
                 PathSegment::Line(end_pt) => {
                     let start_pt: Point2<f32> = curr_pt.expect("line segment requires current point");
-                    let new_dir: Vector2<f32> = end_pt - start_pt;
-                    let left_dir = Vector2::new(-new_dir.y, new_dir.x); // rotate 90 CCW
+                    let line_dir: Vector2<f32> = end_pt - start_pt;
+                    let left_dir = Vector2::new(line_dir.y, -line_dir.x); // rotate 90 CCW
                     let scale_to_width = left_dir.norm().recip() * self.stroke_width / 2.0;
                     let left_dir = left_dir * scale_to_width;
                     let right_dir = -left_dir;
