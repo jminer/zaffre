@@ -59,8 +59,22 @@ struct SolidVertex {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct QuadBezierVertex {
+struct StrokeQuadBezierVertex {
 	position: (f32, f32),
+    pt0: (f32, f32),
+    pt1: (f32, f32),
+    pt2: (f32, f32),
+}
+
+impl StrokeQuadBezierVertex {
+    fn new(position: Point2<f32>, bezier: QuadBezier<f32>) -> Self {
+        StrokeQuadBezierVertex {
+            position: (position.x, position.y),
+            pt0: (bezier.p0.x, bezier.p0.y),
+            pt1: (bezier.p1.x, bezier.p1.y),
+            pt2: (bezier.p2.x, bezier.p2.y),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -72,7 +86,7 @@ struct Geometry<T> {
 #[derive(Debug)]
 struct BakedStroke {
 	solid_geo: Geometry<SolidVertex>,
-	//quad_bezier_geo: Geometry<StrokeQuadBezierVertex>,
+	quad_bezier_geo: Geometry<StrokeQuadBezierVertex>,
 	backend: HashMap<usize, Box<Any>>,
 }
 
@@ -233,8 +247,10 @@ impl PathBuf {
 	// pub fn point_at_distance(segments: Range<usize>, distance: f32) -> (Point, f32, f32);
 
 	fn bake_stroke(&mut self) {
-        let mut vertices = vec![];
-        let mut indices = vec![];
+        let mut solid_vertices = vec![];
+        let mut solid_indices = vec![];
+        let mut quad_bezier_vertices = vec![];
+        let mut quad_bezier_indices = vec![];
         let mut curr_pt = None;
         let mut curr_dir = None;
         for seg in self.segments() {
@@ -250,31 +266,31 @@ impl PathBuf {
                     let left_dir = left_dir * scale_to_width;
                     let right_dir = -left_dir;
 
-                    let start_index = vertices.len();
+                    let start_index = solid_vertices.len();
                     let vert = start_pt + left_dir; // start left
-                    vertices.push(SolidVertex {
+                    solid_vertices.push(SolidVertex {
                         position: (vert.x, vert.y)
                     });
                     let vert = start_pt + right_dir; // start right
-                    vertices.push(SolidVertex {
+                    solid_vertices.push(SolidVertex {
                         position: (vert.x, vert.y)
                     });
                     let vert = end_pt + left_dir; // end left
-                    vertices.push(SolidVertex {
+                    solid_vertices.push(SolidVertex {
                         position: (vert.x, vert.y)
                     });
                     let vert = end_pt + right_dir; // end right
-                    vertices.push(SolidVertex {
+                    solid_vertices.push(SolidVertex {
                         position: (vert.x, vert.y)
                     });
 
-                    indices.push((start_index + 0) as u16);
-                    indices.push((start_index + 1) as u16);
-                    indices.push((start_index + 2) as u16);
+                    solid_indices.push((start_index + 0) as u16);
+                    solid_indices.push((start_index + 1) as u16);
+                    solid_indices.push((start_index + 2) as u16);
 
-                    indices.push((start_index + 1) as u16);
-                    indices.push((start_index + 3) as u16);
-                    indices.push((start_index + 2) as u16);
+                    solid_indices.push((start_index + 1) as u16);
+                    solid_indices.push((start_index + 3) as u16);
+                    solid_indices.push((start_index + 2) as u16);
 
                     curr_pt = Some(end_pt);
                     curr_dir = Some(line_dir);
@@ -323,60 +339,54 @@ impl PathBuf {
                          mid_right_dir, mid_left_dir,
                          end_right_dir, end_left_dir)
                     };
+                    let start_outer_pt = start_pt + so_dir;
                     let mid_outer_pt = mid_pt + mo_dir;
+                    let end_outer_pt = end_pt + eo_dir;
 
-                    let start_index = vertices.len();
-                    let vert = start_pt + so_dir; // start outer
-                    vertices.push(SolidVertex {
-                        position: (vert.x, vert.y)
-                    });
+                    let start_index = quad_bezier_vertices.len();
+                    let vert = start_outer_pt; // start outer
+                    quad_bezier_vertices.push(StrokeQuadBezierVertex::new(vert, bezier));
+
                     let vert = start_pt + si_dir; // start inner
-                    vertices.push(SolidVertex {
-                        position: (vert.x, vert.y)
-                    });
+                    quad_bezier_vertices.push(StrokeQuadBezierVertex::new(vert, bezier));
+
                     // The unwrap shouldn't ever fail, but it isn't worth a panic.
-                    let vert = find_intersection(start_pt, start_dir,
+                    let vert = find_intersection(start_outer_pt, start_dir,
                                                  mid_outer_pt, mid_dir).unwrap_or(mid_pt); // outer before mid
-                    vertices.push(SolidVertex {
-                        position: (vert.x, vert.y)
-                    });
+                    quad_bezier_vertices.push(StrokeQuadBezierVertex::new(vert, bezier));
+
                     let vert = find_intersection(mid_outer_pt, mid_dir,
-                                                 end_pt, end_dir).unwrap_or(mid_pt); // outer after mid
-                    vertices.push(SolidVertex {
-                        position: (vert.x, vert.y)
-                    });
+                                                 end_outer_pt, end_dir).unwrap_or(mid_pt); // outer after mid
+                    quad_bezier_vertices.push(StrokeQuadBezierVertex::new(vert, bezier));
+
                     let vert = mid_pt + mi_dir; // inner mid
-                    vertices.push(SolidVertex {
-                        position: (vert.x, vert.y)
-                    });
-                    let vert = end_pt + eo_dir; // end outer
-                    vertices.push(SolidVertex {
-                        position: (vert.x, vert.y)
-                    });
+                    quad_bezier_vertices.push(StrokeQuadBezierVertex::new(vert, bezier));
+
+                    let vert = end_outer_pt; // end outer
+                    quad_bezier_vertices.push(StrokeQuadBezierVertex::new(vert, bezier));
+
                     let vert = end_pt + ei_dir; // end inner
-                    vertices.push(SolidVertex {
-                        position: (vert.x, vert.y)
-                    });
+                    quad_bezier_vertices.push(StrokeQuadBezierVertex::new(vert, bezier));
 
-                    indices.push((start_index + 0) as u16);
-                    indices.push((start_index + 1) as u16);
-                    indices.push((start_index + 2) as u16);
+                    quad_bezier_indices.push((start_index + 0) as u16);
+                    quad_bezier_indices.push((start_index + 1) as u16);
+                    quad_bezier_indices.push((start_index + 2) as u16);
 
-                    indices.push((start_index + 1) as u16);
-                    indices.push((start_index + 4) as u16);
-                    indices.push((start_index + 2) as u16);
+                    quad_bezier_indices.push((start_index + 1) as u16);
+                    quad_bezier_indices.push((start_index + 4) as u16);
+                    quad_bezier_indices.push((start_index + 2) as u16);
 
-                    indices.push((start_index + 2) as u16);
-                    indices.push((start_index + 4) as u16);
-                    indices.push((start_index + 3) as u16);
+                    quad_bezier_indices.push((start_index + 2) as u16);
+                    quad_bezier_indices.push((start_index + 4) as u16);
+                    quad_bezier_indices.push((start_index + 3) as u16);
 
-                    indices.push((start_index + 4) as u16);
-                    indices.push((start_index + 6) as u16);
-                    indices.push((start_index + 3) as u16);
+                    quad_bezier_indices.push((start_index + 4) as u16);
+                    quad_bezier_indices.push((start_index + 6) as u16);
+                    quad_bezier_indices.push((start_index + 3) as u16);
 
-                    indices.push((start_index + 3) as u16);
-                    indices.push((start_index + 6) as u16);
-                    indices.push((start_index + 5) as u16);
+                    quad_bezier_indices.push((start_index + 3) as u16);
+                    quad_bezier_indices.push((start_index + 6) as u16);
+                    quad_bezier_indices.push((start_index + 5) as u16);
 
                     curr_pt = Some(end_pt);
                     curr_dir = Some(end_dir);
@@ -386,8 +396,12 @@ impl PathBuf {
         }
         self.baked_stroke = Some(BakedStroke {
             solid_geo: Geometry {
-                vertices: vertices,
-                indices: indices,
+                vertices: solid_vertices,
+                indices: solid_indices,
+            },
+            quad_bezier_geo: Geometry {
+                vertices: quad_bezier_vertices,
+                indices: quad_bezier_indices,
             },
             backend: HashMap::new(),
         });
