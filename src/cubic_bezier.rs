@@ -1,8 +1,9 @@
 
+use std::f32::consts::FRAC_PI_2;
 use std::fmt::Debug;
 use std::ops::{Add, Div, Sub};
-use super::{Point2, Rect, LargerFloat};
-use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast};
+use super::{Point2, Rect, LargerFloat, QuadBezier};
+use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast, Matrix2, Origin};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum CurveType {
@@ -162,6 +163,40 @@ impl<N, F> CubicBezier<N> where F: BaseFloat
         unimplemented!()
     }
 
+    // Translates and rotates the curve so that the first point is at the origin (0, 0) and the
+    // last point is on the x axis (x, 0).
+    pub fn axis_aligned(&self) -> CubicBezier<N> {
+        // https://pomax.github.io/bezierinfo/#aligning
+        let (p0, mut p1, mut p2, mut p3) = (cast::<Point2<N>, Point2<N::Float>>(self.p0),
+                                            cast::<Point2<N>, Point2<N::Float>>(self.p1),
+                                            cast::<Point2<N>, Point2<N::Float>>(self.p2),
+                                            cast::<Point2<N>, Point2<N::Float>>(self.p3));
+
+        // Translate all the points to put p0 at the origin.
+        let translation = -p0.to_vector();
+        p1 += translation;
+        p2 += translation;
+        p3 += translation;
+
+        // Rotate the points to put the last point on the x axis.
+        let angle = -p3.y.atan2(p3.x);
+        let (s, c) = angle.sin_cos();
+        let rotation = Matrix2::new(c, -s,
+                                    s,  c);
+
+        p1 = rotation * p1;
+        p2 = rotation * p2;
+        p3 = rotation * p3;
+
+        let bez: CubicBezier<N::Float> = CubicBezier {
+            p0: Point2::origin(),
+            p1: p1,
+            p2: p2,
+            p3: p3,
+        };
+        cast(bez)
+    }
+
     pub fn curve_type(&self) -> CurveType {
         // https://pomax.github.io/bezierinfo/#canonical
         let _0_0: N::Float = cast(0.0);
@@ -295,6 +330,17 @@ fn test_split() {
     let pair1 = bez0.split_using_matrix(0.5);
     assert_approx_eq!(pair0.0, pair1.0);
     assert_approx_eq!(pair0.1, pair1.1);
+}
+
+#[test]
+fn test_axis_aligned() {
+    let bez0 = CubicBezier::new(Point2::new(80.0, 100.0), Point2::new(20.0, 150.0),
+                                Point2::new(100.0, 170.0), Point2::new(220.0, 100.0));
+
+    // calculated using https://pomax.github.io/bezierinfo/#aligning
+    let aligned = CubicBezier::new(Point2::new(0.0, 0.0), Point2::new(-60.0, 50.0),
+                                Point2::new(20.0, 70.0), Point2::new(140.0, 0.0));
+    assert_approx_eq!(bez0.axis_aligned(), aligned);
 }
 
 #[test]
