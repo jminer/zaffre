@@ -90,19 +90,6 @@ impl<N, F> QuadBezier<N> where F: BaseFloat
 }
 
 #[test]
-fn test_point_at() {
-    let bez = QuadBezier::new(Point2::new(220.0, 40.0),
-                              Point2::new(50.0, 180.0),
-                              Point2::new(135.0, 210.0));
-
-    assert_approx_eq!(bez.point_at(0.0), Point2::new(220.0, 40.0));
-    assert_approx_eq!(bez.point_at(1.0), Point2::new(135.0, 210.0));
-
-    assert_approx_eq!(bez.point_at(0.5), Point2::new(113.75, 152.5));
-    assert_approx_eq_eps!(bez.point_at(0.3), Point2::new(140.95, 114.1), 0.00001);
-}
-
-#[test]
 fn test_tangent_at() {
     let bez = QuadBezier::new(Point2::new(220.0, 40.0),
                               Point2::new(50.0, 180.0),
@@ -115,4 +102,17 @@ fn test_tangent_at() {
     assert_approx_eq!(bez.tangent_at(0.0), Vector2::new(-170.0, 140.0).normalize());
     assert_approx_eq!(bez.tangent_at(1.0), Vector2::new(85.0, 30.0).normalize());
     assert_approx_eq!(bez.tangent_at(0.3), Vector2::new(-93.5, 107.0).normalize());
+}
+
+#[test]
+fn test_point_at() {
+    let bez = QuadBezier::new(Point2::new(220.0, 40.0),
+                              Point2::new(50.0, 180.0),
+                              Point2::new(135.0, 210.0));
+
+    assert_approx_eq!(bez.point_at(0.0), Point2::new(220.0, 40.0));
+    assert_approx_eq!(bez.point_at(1.0), Point2::new(135.0, 210.0));
+
+    assert_approx_eq!(bez.point_at(0.5), Point2::new(113.75, 152.5));
+    assert_approx_eq_eps!(bez.point_at(0.3), Point2::new(140.95, 114.1), 0.00001);
 }

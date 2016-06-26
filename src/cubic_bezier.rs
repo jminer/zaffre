@@ -213,17 +213,6 @@ impl<N, F> CubicBezier<N> where F: BaseFloat
     }
 }
 
-#[test]
-fn test_split() {
-    let bez0 = CubicBezier::new(Point2::new(5.0, 10.0), Point2::new(10.0, 30.0),
-                                Point2::new(50.0, 30.0), Point2::new(60.0, 10.0));
-
-    let pair0 = bez0.split_using_de_casteljau(0.5);
-    let pair1 = bez0.split_using_matrix(0.5);
-    assert_approx_eq!(pair0.0, pair1.0);
-    assert_approx_eq!(pair0.1, pair1.1);
-}
-
 #[cfg(test)]
 mod benchmarks {
     use ::test::{black_box, Bencher};
@@ -295,6 +284,17 @@ mod benchmarks {
             black_box(bez0.split_using_de_casteljau(black_box(0.5)));
         });
     }
+}
+
+#[test]
+fn test_split() {
+    let bez0 = CubicBezier::new(Point2::new(5.0, 10.0), Point2::new(10.0, 30.0),
+                                Point2::new(50.0, 30.0), Point2::new(60.0, 10.0));
+
+    let pair0 = bez0.split_using_de_casteljau(0.5);
+    let pair1 = bez0.split_using_matrix(0.5);
+    assert_approx_eq!(pair0.0, pair1.0);
+    assert_approx_eq!(pair0.1, pair1.1);
 }
 
 #[test]
