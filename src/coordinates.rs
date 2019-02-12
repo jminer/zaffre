@@ -328,6 +328,24 @@ fn test_ops() {
 }
 
 
+impl<N> Add<Size2<N>> for Point2<N>
+where
+    N: Copy
+{
+    type Output = Rect<N>;
+
+    /// Combines the point and size into a rectangle.
+    fn add(self, other: Size2<N>) -> Rect<N> {
+        Rect::new(self.x, self.y, other.width, other.height)
+    }
+}
+
+fn test_rect_from_point_size() {
+    assert_eq!(&(Point2::new(3, 10) + Size2::new(6, 9)), &Rect::new(3, 10, 6, 9));
+}
+
+
+
 /// A border size stores a size for the left, top, right, and bottom edges of a rectangle
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct BorderSize2<N> {
