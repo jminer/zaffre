@@ -18,3 +18,12 @@ The current plan for this library:
   be filled with no approximations.
 - Stroking will draw quadratic curves exactly. However, cubic curves will be approximated with
   enough quadratic curves that they won't be further than X% of the stroke width off.
+
+Update in 2019:
+
+Compositing images is the main use case in a UI. DirectWrite can render text to a DirectX texture, then I can use a Vulkan extension to convert that to a Vulkan texture, and render it to a quad. Using sampler arrays, I can bind many textures and make one draw call. Nicol Bolas describes options here, but support for shaderSampledImageArrayDynamicIndexing is good now, so sampler arrays is probably the way to go: https://stackoverflow.com/questions/36772607/vulkan-texture-rendering-on-multiple-meshes
+
+
+https://www.nvidia.com/docs/IO/8228/BatchBatchBatch.pdf
+https://www.reddit.com/r/vulkan/comments/48ixtp/some_initial_vulkan_vs_opengl_performance_tests/
+https://www.reddit.com/r/opengl/comments/4u8qyv/opengl_limited_number_of_textures_how_can_you/d5nt752/
