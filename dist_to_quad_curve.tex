@@ -1,0 +1,97 @@
+\documentclass{article}
+\pagenumbering{gobble}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\hypersetup{
+  pdfborder={0 0 0},
+  colorlinks=true,
+  urlcolor=blue,
+}
+\begin{document}
+
+\title{Distance from a Point to a Quadratic B\'ezier Curve}
+\date{June 12, 2016}
+\maketitle
+
+Starting with 
+\begin{align}
+B(t) &= (1-t)^2 P_0 + 2(1-t)t P_1 + t^2 P_2 \\
+B'(t) &= 2(1-t)(P_1 - P_0) + 2t(P_2 - P_1)
+\end{align}
+
+Equation (1) is the quadratic B\'ezier curve equation. Equation (2) is the derivative, as explained at \url{https://pomax.github.io/bezierinfo/#derivatives}
+
+To isolate t into a term alone:
+
+\begin{align}
+B'(t) &= (2-2t)(P_1 - P_0) + 2t P_2 - 2t P_1 \\
+B'(t) &= 2 P_1 - 2 P_0 - 2t P_1 + 2t P_0 + 2t P_2 - 2t P_1 \\
+B'(t) &= 2 (P_1 - P_0 - t P_1 + t P_0 + t P_2 - t P_1) \\
+B'(t) &= 2 [P_1 - P_0 + ( - P_1 + P_0 + P_2 - P_1)t]
+\end{align}
+
+Multiply factors to go from (2) to (4), factor out a 2 to get (5) and factor out t to get (6). Now we have a constant and a coefficient of t. Now we can rewrite (6) in the following form:
+
+\begin{align}
+B'(t) &= 2(A+Bt) \\
+A &= P_1 - P_0 \nonumber \\
+B &= P_0 - 2 P_1 + P_2 \nonumber
+\end{align}
+
+We want to find t in
+
+\begin{align}
+(P - B(t)) \cdot B'(t) &= 0
+\end{align}
+
+But before doing that, rewrite the curve equation:
+
+\begin{align}
+B(t) &= (1-t)^2 P_0 + 2(1-t)t P_1 + t^2 P_2 \\
+B(t) &= (1 - 2t + t^2) P_0 + (2-2t) t P_1 + t^2 P_2 \\
+B(t) &= P_0 - 2t P_0 + t^2 P_0 + 2t P_1 - 2t^2 P_1 + t^2 P_2 \\
+B(t) &= t^2 P_0 - 2t^2 P_1 + t^2 P_2 - 2t P_0 + 2t P_1 + P_0 \\
+B(t) &= (P_0 - 2 P_1 + P_2) t^2 + 2(-P_0 + P_1) t + P_0 \\
+B(t) &= B t^2 + 2 A t + P_0
+\end{align}
+
+Then do so:
+
+\begin{align}
+(P - B(t)) \cdot B'(t) &= 0 \\
+[P - (B t^2 + 2 A t + P_0)] \cdot 2(A+Bt) &= 0 \\
+(P - B t^2 - 2 A t - P_0) \cdot (A+Bt) &= 0 \\
+P \cdot A - B t^2 \cdot A - 2 A t \cdot A - P_0 \cdot A + \\
+P \cdot Bt - B t^2 \cdot Bt - 2 A t \cdot Bt - P_0 \cdot Bt &= 0 \nonumber \\
+P \cdot A - B \cdot A t^2 - 2 A \cdot A t - P_0 \cdot A + \\
+P \cdot Bt - B \cdot B t^3 - 2 A \cdot B t^2 - P_0 \cdot Bt &= 0 \nonumber \\
+-B \cdot B t^3 - B \cdot A t^2 - 2 A \cdot B t^2 - 2 A \cdot A t + \\
+P \cdot Bt - P_0 \cdot Bt + P \cdot A - P_0 \cdot A &= 0 \nonumber \\
+-B \cdot B t^3 - 3 A \cdot B t^2 + (- 2 A \cdot A + \\
+P \cdot B - P_0 \cdot B)t + P \cdot A - P_0 \cdot A &= 0 \nonumber \\
+B \cdot B t^3 + 3 A \cdot B t^2 + (2 A \cdot A - \\
+P \cdot B + P_0 \cdot B)t - P \cdot A + P_0 \cdot A &= 0 \nonumber
+\end{align}
+
+Starting with equation (15), we substitute B(t) and B'(t) to get equation (16). We can divide both sides by zero to remove the 2 and get equation (17). Then the real works begins when we multiply to get (18). We simplify a couple terms in (19) and order the terms in descending powers of t in (20). Then we combine terms to get (21) and negate both sides to get (22). Equation 22 is the solution we are looking for. It can also be written like
+
+\begin{align}
+B \cdot B t^3 + 3 A \cdot B t^2 + (2 A \cdot A + P' \cdot B)t + P' \cdot A &= 0 \\
+P' &= P_0 - P \nonumber
+\end{align}
+
+It is in the form
+
+\begin{align}
+at^3 + bt^2 + ct + d &= 0 \\
+a &= B \cdot B \nonumber \\
+b &= 3 A \cdot B \nonumber \\
+c &= (2 A \cdot A + P' \cdot B) \nonumber \\
+d &= P' \cdot A \nonumber
+\end{align}
+
+Solving the cubic equation will give 1 to 3 t values which are positions on the curve that are orthogonal to the point.
+
+\end{document}
