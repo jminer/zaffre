@@ -8,6 +8,13 @@ keywords = ["2d", "graphics"]
 license = "MPL-2.0"
 
 [dependencies]
+ash = "0.28"
 glium = "0.14.0"
+#glium = { path = "../glium" }
+lazy_static = "1"
 nalgebra = "0.8.2"
 num = "0.1.32"
+smallvec = "0.1.8"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["libloaderapi", "windef"] }
