@@ -54,3 +54,7 @@ For covering extra pixels to do antialiasing with curve rendering, this extensio
 https://www.saschawillems.de/blog/2018/03/04/conservative-rasterization-in-vulkan-using-vk_ext_conservative_rasterization/
 
 However, it is only supported for GeForce 9xx and newer, and AMD Radeon RX Vega and newer. Maybe I could just depend on multisample AA for previous cards, then eventually everything will support conservative rasterization and have perfect AA.
+
+Don't rely on vkAcquireNextImageKHR to ever block:
+
+https://www.reddit.com/r/vulkan/comments/b37762/command_queue_grows_indefinitely_on_intel_gpus/
