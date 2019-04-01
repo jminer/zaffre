@@ -1,5 +1,7 @@
 
+use std::cmp;
 use std::ffi::CStr;
+use std::mem;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
 
@@ -36,6 +38,50 @@ pub struct VulkanGlobals {
     pub entry: Entry,
     pub instance: Instance,
     pub debug_messenger: Option<DebugUtilsMessengerEXT>,
+    pub surface_loader: Surface,
+    pub device: VulkanDevice,
+}
+
+pub struct VulkanDevice {
+    // Since images are only useable with the device they were created for, it would be too
+    // complicated to try to have multiple logical devices. Also, an app can create an image before
+    // a swapchain, so we won't know what Vulkan surface we need to have present support for until
+    // after we've already picked a physical device and created a logical device. However, looking
+    // at every platform in the Vulkan spec, it looks like if a device can present to one surface,
+    // it can present to any surface, because of the existence of
+    // vkGetPhysicalDeviceWin32PresentationSupportKHR and the like (and I can't imagine it working
+    // differently). So we can just use vkGetPhysicalDeviceWin32PresentationSupportKHR,
+    // vkGetPhysicalDeviceWaylandPresentationSupportKHR, etc.
+    pub physical: PhysicalDevice,
+    pub queue_family_indices: QueueFamilyIndices,
+    pub logical: ash::Device,
+    pub swapchain_loader: Swapchain,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct QueueFamilyIndices {
+    pub graphics: u32,
+    pub present: u32,
+    pub transfer: u32,
+}
+
+impl QueueFamilyIndices {
+    fn new(graphics: u32, present: u32, transfer: u32) -> QueueFamilyIndices {
+        // TODO: fill in unique indices here?
+        Self { graphics, present, transfer }
+    }
+
+    pub fn get_unique_indices(&self) -> Vec<u32> {
+        let mut indices = Vec::with_capacity(3);
+        indices.push(self.graphics);
+        if !indices.contains(&self.present) {
+            indices.push(self.present);
+        }
+        if !indices.contains(&self.transfer) {
+            indices.push(self.transfer);
+        }
+        indices
+    }
 }
 
 pub fn create_instance() -> VulkanGlobals {
@@ -76,8 +122,16 @@ pub fn create_instance() -> VulkanGlobals {
         } else {
             None
         };
+        let surface_loader = Surface::new(&entry, &instance);
+        let device = create_device(&entry, &instance, &surface_loader);
 
-        VulkanGlobals { entry, instance, debug_messenger }
+        VulkanGlobals {
+            entry,
+            instance,
+            debug_messenger,
+            surface_loader,
+            device,
+        }
     }
 }
 
@@ -173,4 +227,105 @@ unsafe extern "system" fn debug_callback(
     let message = CStr::from_ptr((*p_callback_data).p_message);
     println!("validation msg: {}", message.to_string_lossy());
     FALSE
+}
+
+unsafe fn create_device(
+    entry: &Entry,
+    instance: &Instance,
+    surface_loader: &Surface,
+) -> VulkanDevice {
+    let (phy_device, indices) = get_preferred_physical_device(entry, instance, surface_loader)
+        .expect("no acceptable physical device found");
+
+    const QUEUE_PRIORITIES: &[f32] = &[1.0]; // only create one queue
+    let queue_create_infos: Vec<_> = indices.get_unique_indices().iter().map(|i|
+        DeviceQueueCreateInfo::builder()
+            .queue_family_index(*i)
+            .queue_priorities(QUEUE_PRIORITIES) // sets queue count too
+            .build()
+    ).collect();
+    let extensions = get_device_extensions_list(&instance, phy_device);
+    let enabled_features = PhysicalDeviceFeatures::builder().build();
+    let device_create_info = DeviceCreateInfo::builder()
+        .queue_create_infos(&queue_create_infos)
+        .enabled_extension_names(&extensions)
+        .enabled_features(&enabled_features)
+        .build();
+    let device = instance.create_device(phy_device, &device_create_info, None)
+        .expect("failed to create logical device");
+    let swapchain_loader = Swapchain::new(instance, &device);
+
+    VulkanDevice {
+        physical: phy_device,
+        queue_family_indices: indices,
+        logical: device,
+        swapchain_loader,
+    }
+}
+
+unsafe fn get_preferred_physical_device(
+    entry: &Entry,
+    instance: &Instance,
+    surface_loader: &Surface,
+) -> Option<(PhysicalDevice, QueueFamilyIndices)> {
+    let phy_devices = instance.enumerate_physical_devices()
+        .expect("failed to get physical devices");
+    let filtered_devices: Vec<_> = phy_devices.iter().filter_map(|dev| {
+        // vulkan-tutorial.com checks if queueCount > 0, but the Vulkan spec says "Each queue
+        // family must support at least one queue." so I don't think that is necessary.
+        let queue_family_props = instance
+            .get_physical_device_queue_family_properties(*dev);
+        // Any impl that supports graphics must support compute too (but we aren't checking
+        // for it yet). And graphics is a superset of transfer so shouldn't be checked for.
+        let graphics_index = queue_family_props
+            .iter()
+            .position(|props| props.queue_flags.contains(QueueFlags::GRAPHICS));
+        // Find a transfer queue that can use the GPU's copy engine.
+        let transfer_index = queue_family_props
+            .iter()
+            .position(|props| {
+                props.queue_flags.contains(QueueFlags::TRANSFER) &&
+                !props.queue_flags.contains(QueueFlags::GRAPHICS)
+            });
+        // Don't require a separate transfer queue.
+        let transfer_index = transfer_index.or(graphics_index);
+        // Find any queue that supports presentation.
+        let present_index = (0..queue_family_props.len() as u32)
+            .find(|i| get_physical_device_presentation_support(entry, instance, *dev, *i));
+        if let (Some(graphics_index), Some(present_index), Some(transfer_index)) =
+            (graphics_index, present_index, transfer_index)
+        {
+            Some((*dev, QueueFamilyIndices {
+                graphics: graphics_index as u32,
+                present: present_index as u32,
+                transfer: transfer_index as u32,
+            }))
+        } else {
+            None
+        }
+    }).collect();
+    for (dev, queue_family_indices) in filtered_devices.iter() {
+        let props = instance.get_physical_device_properties(*dev);
+        if props.device_type == PhysicalDeviceType::DISCRETE_GPU {
+            return Some((*dev, *queue_family_indices));
+        }
+    }
+    if !filtered_devices.is_empty() {
+        return Some(filtered_devices[0]);
+    }
+    None
+}
+
+unsafe fn get_physical_device_presentation_support(
+    entry: &Entry,
+    instance: &Instance,
+    physical_device: PhysicalDevice,
+    queue_family_index: u32,
+) -> bool {
+    // temporary until it is added to ash
+    let surface_fn = KhrWin32SurfaceFn::load(|name| unsafe {
+        mem::transmute(entry.get_instance_proc_addr(instance.handle(), name.as_ptr()))
+    });
+    surface_fn
+        .get_physical_device_win32_presentation_support_khr(physical_device, queue_family_index) != 0
 }

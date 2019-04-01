@@ -1,7 +1,9 @@
 
+use std::cmp;
 use std::os::raw::c_void;
 use std::ptr;
 use std::sync::Mutex;
+use std::u32;
 
 use ash::{Entry, Instance};
 use ash::extensions::khr::Win32Surface;
@@ -140,31 +142,10 @@ lazy_static! {
     static ref VULKAN_GLOBALS: Mutex<VulkanGlobals> = Mutex::new(create_instance());
 }
 
-#[derive(Copy, Clone, Debug)]
-struct QueueFamilyIndexes {
-    graphics: u32,
-    present: u32,
-    transfer: u32,
-}
-
-impl QueueFamilyIndexes {
-    fn get_unique_indexes(&self) -> Vec<u32> {
-        let mut indexes = Vec::with_capacity(3);
-        indexes.push(self.graphics);
-        if !indexes.contains(&self.present) {
-            indexes.push(self.present);
-        }
-        if !indexes.contains(&self.transfer) {
-            indexes.push(self.transfer);
-        }
-        indexes
-    }
-}
-
 pub struct Surface {
     hwnd: HWND,
     vulkan_surface: SurfaceKHR,
-    device: ash::Device,
+    swapchain: SwapchainKHR,
 }
 
 impl Surface {
@@ -174,6 +155,8 @@ impl Surface {
 
     pub unsafe fn from_hwnd(hwnd: HWND) -> Self {
         let globals = VULKAN_GLOBALS.lock().unwrap();
+
+        // TODO: cache?
         let win32_surface_loader = Win32Surface::new(&globals.entry, &globals.instance);
         let create_info = Win32SurfaceCreateInfoKHR {
             s_type: StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
@@ -183,84 +166,100 @@ impl Surface {
         };
         let vulkan_surface = win32_surface_loader.create_win32_surface(&create_info, None)
             .expect("failed to create window surface");
-        let (phy_device, indexes) = Self::get_preferred_physical_device(&globals, vulkan_surface)
-            .expect("no acceptable physical device found");
+        if !globals.surface_loader.get_physical_device_surface_support(
+            globals.device.physical,
+            globals.device.queue_family_indices.present,
+            vulkan_surface,
+        ) {
+            panic!("physical device doesn't support presentation onto surface");
+        }
 
-        const QUEUE_PRIORITIES: &[f32] = &[1.0]; // only create one queue
-        let queue_create_infos: Vec<_> = indexes.get_unique_indexes().iter().map(|i|
-            DeviceQueueCreateInfo::builder()
-                .queue_family_index(*i)
-                .queue_priorities(QUEUE_PRIORITIES) // sets queue count too
-                .build()
-        ).collect();
-        let extensions = get_device_extensions_list(&globals.instance, phy_device);
-        let enabled_features = PhysicalDeviceFeatures::builder().build();
-        let device_create_info = DeviceCreateInfo::builder()
-            .queue_create_infos(&queue_create_infos)
-            .enabled_extension_names(&extensions)
-            .enabled_features(&enabled_features)
-            .build();
-        let device = globals.instance.create_device(phy_device, &device_create_info, None)
-            .expect("failed to create logical device");
+        let swapchain = Self::create_swapchain(
+            &globals,
+            vulkan_surface,
+            || unimplemented!(),
+            SwapchainKHR::null(),
+        );
+        let swapchain_images = globals.device.swapchain_loader.get_swapchain_images(swapchain)
+            .expect("failed to get swapchain images");
 
         Self {
             hwnd,
             vulkan_surface,
-            device,
+            swapchain,
         }
     }
 
-    unsafe fn get_preferred_physical_device(
+    // `get_surface_extent` is only used as a fallback when the surface doesn't report a size. I
+    // son't think it's needed on Windows and Linux at least.
+    // `old_swapchain` should be SwapchainKHR::null() if there is no existing swapchain.
+    unsafe fn create_swapchain<F>(
         globals: &VulkanGlobals,
         surface: SurfaceKHR,
-    ) -> Option<(PhysicalDevice, QueueFamilyIndexes)> {
-        let surface_loader = ash::extensions::khr::Surface::new(&globals.entry, &globals.instance);
-        let phy_devices = globals.instance.enumerate_physical_devices()
-            .expect("failed to get physical devices");
-        let filtered_devices: Vec<_> = phy_devices.iter().filter_map(|dev| {
-            // vulkan-tutorial.com checks if queueCount > 0, but the Vulkan spec says "Each queue
-            // family must support at least one queue." so I don't think that is necessary.
-            let queue_family_props = globals.instance
-                .get_physical_device_queue_family_properties(*dev);
-            // Any impl that supports graphics must support compute too (but we aren't checking
-            // for it yet). And graphics is a superset of transfer so shouldn't be checked for.
-            let graphics_index = queue_family_props
-                .iter()
-                .position(|props| props.queue_flags.contains(QueueFlags::GRAPHICS));
-            // Find a transfer queue that can use the GPU's copy engine.
-            let transfer_index = queue_family_props
-                .iter()
-                .position(|props| {
-                    props.queue_flags.contains(QueueFlags::TRANSFER) &&
-                    !props.queue_flags.contains(QueueFlags::GRAPHICS)
-                });
-            // Don't require a separate transfer queue.
-            let transfer_index = transfer_index.or(graphics_index);
-            // Find any queue that supports presenting to the surface.
-            let present_index = (0..queue_family_props.len() as u32)
-                .find(|i| surface_loader.get_physical_device_surface_support(*dev, *i, surface));
-            if let (Some(graphics_index), Some(present_index), Some(transfer_index)) =
-                (graphics_index, present_index, transfer_index)
-            {
-                Some((*dev, QueueFamilyIndexes {
-                    graphics: graphics_index as u32,
-                    present: present_index as u32,
-                    transfer: transfer_index as u32,
-                }))
-            } else {
-                None
-            }
-        }).collect();
-        for (dev, queue_family_indexes) in filtered_devices.iter() {
-            let props = globals.instance.get_physical_device_properties(*dev);
-            if props.device_type == PhysicalDeviceType::DISCRETE_GPU {
-                return Some((*dev, *queue_family_indexes));
-            }
-        }
-        if !filtered_devices.is_empty() {
-            return Some(filtered_devices[0]);
-        }
-        None
+        get_surface_extent: F,
+        old_swapchain: SwapchainKHR,
+    ) -> SwapchainKHR
+    where F: FnOnce() -> Extent2D,
+    {
+        let surface_loader = &globals.surface_loader;
+        let caps = surface_loader
+            .get_physical_device_surface_capabilities(globals.device.physical, surface)
+            .expect("failed to get surface capabilities");
+        let formats = surface_loader
+            .get_physical_device_surface_formats(globals.device.physical, surface)
+            .expect("failed to get surface formats");
+        let present_modes = surface_loader
+            .get_physical_device_surface_present_modes(globals.device.physical, surface)
+            .expect("failed to get surface formats");
+
+        let best_format = *formats.iter().find(|fmt| {
+            // There are only two commonly supported formats, R8G8B8A8_SRGB and R8G8B8A8_UNORM.
+            fmt.format == Format::R8G8B8A8_SRGB && fmt.color_space == ColorSpaceKHR::SRGB_NONLINEAR
+        }).unwrap_or_else(|| &formats[0]);
+        let image_count = if caps.max_image_count == 0 {
+            caps.min_image_count + 1
+        } else {
+            cmp::min(caps.min_image_count + 1, caps.max_image_count)
+        };
+        let image_extent = match caps.current_extent {
+            Extent2D { width: u32::MAX, height: u32::MAX } => get_surface_extent(),
+            _ => caps.current_extent,
+        };
+        // Just require these because everything I've looked at supports them and they may be
+        // useful.
+        let image_usage_extra = if !caps.supported_usage_flags.contains(ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::TRANSFER_SRC) {
+            panic!("swapchain images must support TRANSFER_DST and TRANSFER_SRC");
+        };
+        // TODO: avoid this memory allocations
+        let queue_family_indices = globals.device.queue_family_indices.get_unique_indices();
+        let image_sharing_mode = if queue_family_indices.len() == 1 {
+            SharingMode::EXCLUSIVE
+        } else {
+            SharingMode::CONCURRENT
+        };
+
+        let create_info = SwapchainCreateInfoKHR::builder()
+            .surface(surface)
+            .min_image_count(image_count)
+            .image_format(best_format.format)
+            .image_color_space(best_format.color_space)
+            .image_extent(image_extent)
+            .image_array_layers(1)
+            .image_usage(
+                ImageUsageFlags::COLOR_ATTACHMENT |
+                ImageUsageFlags::TRANSFER_DST |
+                ImageUsageFlags::TRANSFER_SRC,
+            )
+            .image_sharing_mode(image_sharing_mode)
+            .queue_family_indices(&queue_family_indices)
+            .pre_transform(caps.current_transform)
+            .composite_alpha(caps.supported_composite_alpha) // usually OPAQUE or INHERIT
+            .present_mode(PresentModeKHR::FIFO) // always supported
+            .clipped(true)
+            .old_swapchain(old_swapchain);
+
+        globals.device.swapchain_loader.create_swapchain(&create_info, None)
+            .expect("failed to create swapchain")
     }
 
     pub fn draw(scene: &Scene) {
@@ -271,10 +270,7 @@ impl Drop for Surface {
     fn drop(&mut self) {
         unsafe {
             let globals = VULKAN_GLOBALS.lock().unwrap();
-            let surface_loader =
-                ash::extensions::khr::Surface::new(&globals.entry, &globals.instance);
-            surface_loader.destroy_surface(self.vulkan_surface, None);
-            self.device.destroy_device(None);
+            globals.surface_loader.destroy_surface(self.vulkan_surface, None);
         }
     }
 }
