@@ -14,7 +14,7 @@ use winapi::shared::windef::{*, HWND};
 use winapi::um::libloaderapi::GetModuleHandleW;
 
 use super::{Color, Point2, Rect, Size2};
-use super::vk_util::{create_instance, get_device_extensions_list, VulkanGlobals};
+use super::vk_util::{create_instance, VulkanGlobals};
 
 /// An image stored on the CPU.
 pub struct Image {
@@ -208,9 +208,10 @@ impl Surface {
         let formats = surface_loader
             .get_physical_device_surface_formats(globals.device.physical, surface)
             .expect("failed to get surface formats");
-        let present_modes = surface_loader
-            .get_physical_device_surface_present_modes(globals.device.physical, surface)
-            .expect("failed to get surface formats");
+        // Just using FIFO for now, which is always supported.
+        //let present_modes = surface_loader
+        //    .get_physical_device_surface_present_modes(globals.device.physical, surface)
+        //    .expect("failed to get surface formats");
 
         let best_format = *formats.iter().find(|fmt| {
             // There are only two commonly supported formats, R8G8B8A8_SRGB and R8G8B8A8_UNORM.
@@ -227,7 +228,8 @@ impl Surface {
         };
         // Just require these because everything I've looked at supports them and they may be
         // useful.
-        let image_usage_extra = if !caps.supported_usage_flags.contains(ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::TRANSFER_SRC) {
+        let image_usage_extra = ImageUsageFlags::TRANSFER_DST | ImageUsageFlags::TRANSFER_SRC;
+        if !caps.supported_usage_flags.contains(image_usage_extra) {
             panic!("swapchain images must support TRANSFER_DST and TRANSFER_SRC");
         };
         // TODO: avoid this memory allocations
@@ -246,9 +248,7 @@ impl Surface {
             .image_extent(image_extent)
             .image_array_layers(1)
             .image_usage(
-                ImageUsageFlags::COLOR_ATTACHMENT |
-                ImageUsageFlags::TRANSFER_DST |
-                ImageUsageFlags::TRANSFER_SRC,
+                ImageUsageFlags::COLOR_ATTACHMENT | image_usage_extra,
             )
             .image_sharing_mode(image_sharing_mode)
             .queue_family_indices(&queue_family_indices)

@@ -1,5 +1,4 @@
 
-use std::cmp;
 use std::ffi::CStr;
 use std::mem;
 use std::os::raw::{c_char, c_void};
@@ -123,7 +122,7 @@ pub fn create_instance() -> VulkanGlobals {
             None
         };
         let surface_loader = Surface::new(&entry, &instance);
-        let device = create_device(&entry, &instance, &surface_loader);
+        let device = create_device(&entry, &instance);
 
         VulkanGlobals {
             entry,
@@ -187,14 +186,14 @@ pub unsafe fn get_device_extensions_list(
     instance: &Instance,
     phy_device: PhysicalDevice,
 ) -> Vec<*const c_char> {
-    let mut extensions = vec![
+    let extensions = vec![
         Swapchain::name(),
     ];
     println!("Vulkan device extensions:");
     let ext_props = instance.enumerate_device_extension_properties(phy_device)
         .expect("failed to get extension properties");
     for ext_prop in ext_props {
-        let ext_name = unsafe { CStr::from_ptr(ext_prop.extension_name.as_ptr()) };
+        let ext_name = CStr::from_ptr(ext_prop.extension_name.as_ptr());
         println!("  {}", ext_name.to_string_lossy());
     }
     extensions.iter().map(|ext| ext.as_ptr()).collect()
@@ -218,10 +217,10 @@ unsafe fn create_debug_messenger(entry: &Entry, instance: &Instance) -> DebugUti
 }
 
 unsafe extern "system" fn debug_callback(
-    message_severity: DebugUtilsMessageSeverityFlagsEXT,
-    message_types: DebugUtilsMessageTypeFlagsEXT,
+    _message_severity: DebugUtilsMessageSeverityFlagsEXT,
+    _message_types: DebugUtilsMessageTypeFlagsEXT,
     p_callback_data: *const DebugUtilsMessengerCallbackDataEXT,
-    p_user_data: *mut c_void,
+    _p_user_data: *mut c_void,
 ) -> Bool32 {
     let message = CStr::from_ptr((*p_callback_data).p_message);
     println!("validation msg: {}", message.to_string_lossy());
@@ -231,9 +230,8 @@ unsafe extern "system" fn debug_callback(
 unsafe fn create_device(
     entry: &Entry,
     instance: &Instance,
-    surface_loader: &Surface,
 ) -> VulkanDevice {
-    let (phy_device, indices) = get_preferred_physical_device(entry, instance, surface_loader)
+    let (phy_device, indices) = get_preferred_physical_device(entry, instance)
         .expect("no acceptable physical device found");
 
     const QUEUE_PRIORITIES: &[f32] = &[1.0]; // only create one queue
@@ -264,7 +262,6 @@ unsafe fn create_device(
 unsafe fn get_preferred_physical_device(
     entry: &Entry,
     instance: &Instance,
-    surface_loader: &Surface,
 ) -> Option<(PhysicalDevice, QueueFamilyIndices)> {
     let phy_devices = instance.enumerate_physical_devices()
         .expect("failed to get physical devices");
@@ -321,9 +318,9 @@ unsafe fn get_physical_device_presentation_support(
     queue_family_index: u32,
 ) -> bool {
     // temporary until it is added to ash
-    let surface_fn = KhrWin32SurfaceFn::load(|name| unsafe {
+    let surface_fn = KhrWin32SurfaceFn::load(|name|
         mem::transmute(entry.get_instance_proc_addr(instance.handle(), name.as_ptr()))
-    });
+    );
     surface_fn
         .get_physical_device_win32_presentation_support_khr(physical_device, queue_family_index) != 0
 }
