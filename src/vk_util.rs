@@ -212,8 +212,7 @@ unsafe fn create_debug_messenger(entry: &Entry, instance: &Instance) -> DebugUti
     let create_info = DebugUtilsMessengerCreateInfoEXT::builder()
         .message_severity(severity)
         .message_type(ty)
-        .pfn_user_callback(Some(debug_callback))
-        .build();
+        .pfn_user_callback(Some(debug_callback));
     debug_utils_loader.create_debug_utils_messenger(&create_info, None)
         .expect("failed to create debug messenger")
 }
@@ -249,8 +248,7 @@ unsafe fn create_device(
     let device_create_info = DeviceCreateInfo::builder()
         .queue_create_infos(&queue_create_infos)
         .enabled_extension_names(&extensions)
-        .enabled_features(&enabled_features)
-        .build();
+        .enabled_features(&enabled_features);
     let device = instance.create_device(phy_device, &device_create_info, None)
         .expect("failed to create logical device");
     let swapchain_loader = Swapchain::new(instance, &device);

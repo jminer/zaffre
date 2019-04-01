@@ -28,6 +28,9 @@ https://www.nvidia.com/docs/IO/8228/BatchBatchBatch.pdf
 https://www.reddit.com/r/vulkan/comments/48ixtp/some_initial_vulkan_vs_opengl_performance_tests/
 https://www.reddit.com/r/opengl/comments/4u8qyv/opengl_limited_number_of_textures_how_can_you/d5nt752/
 
+## Ash
+
+In a GitHub issue, Ash developers said that you usually aren't supposed to call build() on struct builders. They implement Deref, so just pass them in place of the struct. Helps check that the lifetime of slices is long enough.
 
 ## Vulkan
 
