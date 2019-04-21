@@ -12,3 +12,26 @@ impl<N> Color<N> {
         Color { red, green, blue, alpha }
     }
 }
+
+// https://www.khronos.org/registry/DataFormat/specs/1.2/dataformat.1.2.html#TRANSFER_SRGB
+
+// SIMD could be used to do sRGB conversion much faster
+// https://stackoverflow.com/questions/29856006/sse-intrinsics-convert-32-bit-floats-to-unsigned-8-bit-integers
+
+fn srgb_to_linear(val: u8) -> f32 {
+    let val = val as f32 * (1.0 / 255.0);
+    if val <= 0.04045 {
+        val * (1.0 / 12.92)
+    } else {
+        ((val + 0.055) * (1.0 / 1.055)).powf(2.4)
+    }
+}
+
+fn linear_to_srgb(val: f32) -> u8 {
+    let val = if val <= 0.0031308 {
+        val * 12.92
+    } else {
+        val.powf(1.0 / 2.4) * 1.055 - 0.055
+    };
+    (val * 255.0).round() as u8
+}

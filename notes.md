@@ -61,3 +61,12 @@ However, it is only supported for GeForce 9xx and newer, and AMD Radeon RX Vega 
 Don't rely on vkAcquireNextImageKHR to ever block:
 
 https://www.reddit.com/r/vulkan/comments/b37762/command_queue_grows_indefinitely_on_intel_gpus/
+
+# sRGB to Linear Conversion and vice versa
+
+The Vulkan spec references the "sRGB EOTF" section in this spec:
+
+https://www.khronos.org/registry/DataFormat/specs/1.2/dataformat.1.2.html
+
+It is in section 13.3.
+
