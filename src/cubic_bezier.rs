@@ -1,7 +1,7 @@
 
 use std::f32::consts::FRAC_PI_2;
 use std::fmt::Debug;
-use std::ops::{Add, Div, Sub};
+use std::ops::{Add, Div, Mul, Sub};
 use super::{Point2, Rect, LargerFloat, QuadBezier};
 use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast, Matrix2, Origin};
 
@@ -75,7 +75,9 @@ impl<N, F> CubicBezier<N> where F: BaseFloat
                                  + LargerFloat<Float = F>
                                  + Sub<Output = N>
                                  + Add<Output = N>
-                                 + Div<Output = N> {
+                                 + Mul<Output = N>
+                                 + Div<Output = N>,
+                                f32: Cast<F> {
     #[cfg(test)]
     fn split_using_matrix(&self, t: f32) -> (CubicBezier<N>, CubicBezier<N>) {
         // https://pomax.github.io/bezierinfo/#matrixsplit
@@ -197,6 +199,52 @@ impl<N, F> CubicBezier<N> where F: BaseFloat
         cast(bez)
     }
 
+    pub fn inflection_points(&self) -> (Option<f32>, Option<f32>) {
+        // https://pomax.github.io/bezierinfo/#inflections
+        let _0_0: N::Float = cast(0.0);
+        let _2_0: N::Float = cast(2.0);
+        let _3_0: N::Float = cast(3.0);
+        let _4_0: N::Float = cast(4.0);
+        let _18_0: N::Float = cast(18.0);
+
+        let aligned = self.axis_aligned();
+        let (p0, mut p1, mut p2, mut p3) = (cast::<Point2<N>, Point2<N::Float>>(aligned.p0),
+                                            cast::<Point2<N>, Point2<N::Float>>(aligned.p1),
+                                            cast::<Point2<N>, Point2<N::Float>>(aligned.p2),
+                                            cast::<Point2<N>, Point2<N::Float>>(aligned.p3));
+
+        let a = p2.x * p1.y;
+        let b = p3.x * p1.y;
+        let c = p1.x * p2.y;
+        let d = p3.x * p2.y;
+
+        let x = _18_0 * (-_3_0 * a + _2_0 * b + _3_0 * c - d);
+        let y = _18_0 * (_3_0 * a - b - _3_0 * c);
+        let z = _18_0 * (c - a);
+
+        // can't divide by zero
+        if x == _0_0 {
+            return (None, None);
+        }
+
+        // Quadratic formula
+        let discrim = y * y - _4_0 * x * z;
+
+        if discrim < _0_0 {
+            return (None, None);
+        }
+
+        let t0: f32 = cast((-y + discrim.sqrt()) / (_2_0 * x));
+        let t1: f32 = cast((-y - discrim.sqrt()) / (_2_0 * x));
+
+        match (t0 >= 0.0 && t0 <= 1.0, t1 >= 0.0 && t1 <= 1.0) {
+            (true, true) if t1 < t0 => (Some(t1), Some(t0)), // sort
+            (true, true) => (Some(t0), Some(t1)),
+            (true, false) => (Some(t0), None),
+            (false, true) => (Some(t1), None),
+            (false, false) => (None, None),
+        }
+    }
     pub fn curve_type(&self) -> CurveType {
         // https://pomax.github.io/bezierinfo/#canonical
         let _0_0: N::Float = cast(0.0);
@@ -341,6 +389,32 @@ fn test_axis_aligned() {
     let aligned = CubicBezier::new(Point2::new(0.0, 0.0), Point2::new(-60.0, 50.0),
                                 Point2::new(20.0, 70.0), Point2::new(140.0, 0.0));
     assert_approx_eq!(bez0.axis_aligned(), aligned);
+}
+
+#[test]
+fn test_inflection_points() {
+    let bez = CubicBezier::new(Point2::new(20.0, 70.0),
+                               Point2::new(50.0, 30.0),
+                               Point2::new(90.0, 90.0),
+                               Point2::new(150.0, 40.0));
+    let pts = bez.inflection_points();
+    assert_eq!(pts.1, None);
+    assert_approx_eq!(0.4634282, pts.0.unwrap());
+
+    let bez = CubicBezier::new(Point2::new(40.0, 30.0),
+                               Point2::new(120.0, 80.0),
+                               Point2::new(65.0, 80.0),
+                               Point2::new(150.0, 35.0));
+    let pts = bez.inflection_points();
+    assert_approx_eq!(0.28623563, pts.0.unwrap());
+    assert_approx_eq!(0.7347969, pts.1.unwrap());
+
+    let bez = CubicBezier::new(Point2::new(40.0, 30.0),
+                               Point2::new(115.0, 100.0),
+                               Point2::new(130.0, 75.0),
+                               Point2::new(150.0, 35.0));
+    let pts = bez.inflection_points();
+    assert_eq!((None, None), pts);
 }
 
 #[test]
