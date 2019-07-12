@@ -1,5 +1,5 @@
 
-use std::f32::consts::FRAC_PI_2;
+use std::f32::consts::{FRAC_PI_2, PI};
 use std::fmt::Debug;
 use std::ops::{Add, Div, Mul, Sub};
 use super::{Point2, Rect, LargerFloat, QuadBezier};
@@ -294,6 +294,82 @@ impl<N, F> CubicBezier<N> where F: BaseFloat
             }
         }
     }
+
+}
+
+struct Roots {
+    arr: [f32; 3],
+    len: u32,
+}
+
+impl Roots {
+    fn get(&self) -> &[f32] {
+        &self.arr[0..self.len as usize]
+    }
+}
+
+// Takes coefficients of an equation in the form
+//   ax^3 + bx^2 + cx + d = 0
+// and returns p and q in the equation
+//   t^3 + pt + q = 0
+fn reduce_to_depressed_cubic(a: f32, b: f32, c: f32, d: f32) -> (f32, f32) {
+    // https://en.wikipedia.org/wiki/Cubic_function#Reduction_to_a_depressed_cubic
+    // I'm using Wikipedia's formulas because on this page x^3 has no coefficient:
+    // http://www.trans4mind.com/personal_development/mathematics/polynomials/cubicAlgebra.htm
+    // The only thing it should change compared to the second page is the term added/subtracted at
+    // the very end. It needs to be -b/(3*a) instead of -a/3.
+    let a_2 = a * a;
+    let b_2 = b * b;
+    let ac = a * c;
+    let p = (3.0 * ac - b_2) / (3.0 * a_2);
+    let q = (2.0 * b_2 * b - 9.0 * ac * b + 27.0 * a_2 * d) / (27.0 * a_2 * a);
+    (p, q)
+}
+
+
+fn solve_cubic(a: f32, b: f32, c: f32, d: f32) -> Roots {
+    let (p, q) = reduce_to_depressed_cubic(a, b, c, d);
+    let b_d_3a = b / (3.0 * a);
+
+    // http://www.trans4mind.com/personal_development/mathematics/polynomials/cubicAlgebra.htm
+    let p_d_3 = p * (1.0 / 3.0);
+    let p_3_d_27 = p_d_3 * p_d_3 * p_d_3;
+    let q_d_2 = q * (1.0 / 2.0);
+
+    let delta = q * q * (1.0 / 4.0) + p_3_d_27;
+    if(delta <= 0.0) {
+        let r = (-p_3_d_27).sqrt();
+        let phi_d_3 = (-q_d_2 / r).acos() * (1.0 / 3.0);
+        let two_r_d_3 = 2.0 * (-p_d_3).sqrt();
+
+        let r1 = two_r_d_3 * phi_d_3.cos() - b_d_3a;
+        let r2 = two_r_d_3 * (phi_d_3 + 2.0 * PI / 3.0).cos() - b_d_3a;
+        let r3 = two_r_d_3 * (phi_d_3 + 4.0 * PI / 3.0).cos() - b_d_3a;
+
+        let mut roots = Roots {
+            arr: [r1, r2, r3],
+            len: 3,
+        };
+        // Deduplicate any very close roots.
+        if r3.approx_eq_ulps(&r1, 32) || r3.approx_eq_ulps(&r2, 32) {
+            roots.len -= 1;
+        }
+        if r2.approx_eq_ulps(&r1, 32)  {
+            roots.arr = [r1, r3, 0.0];
+            roots.len -= 1;
+        }
+
+        return roots;
+    } else {
+        let delta_sqrt = delta.sqrt();
+        let u = (-q_d_2 + delta_sqrt).cbrt();
+        let v = (q_d_2 + delta_sqrt).cbrt();
+
+        return Roots {
+            arr: [u - v - b_d_3a, 0.0, 0.0],
+            len: 1,
+        };
+    }
 }
 
 #[cfg(test)]
@@ -486,4 +562,28 @@ fn test_curve_type() {
                                Point2::new(220.0, 40.0));
     assert_eq!(bez.curve_type(), CurveType::DoubleInflection);
 
+}
+
+#[test]
+fn test_solve_cubic() {
+    // I used Wolfram Alpha to solve and graph.
+
+    // x^3 + x^2 + x + 1 = 0
+    let roots = solve_cubic(1.0, 1.0, 1.0, 1.0);
+    assert_eq!(roots.get().len(), 1);
+    assert_approx_eq!(roots.get()[0], -1.0);
+
+    // x^3 - 9x^2 + x + 1 = 0
+    let roots = solve_cubic(1.0, -9.0, 1.0, 1.0);
+    assert_eq!(roots.get().len(), 3);
+    assert_approx_eq!(roots.get()[0], 8.874622);
+    assert_approx_eq!(roots.get()[1], -0.278795);
+    assert_approx_eq!(roots.get()[2], 0.40417218);
+
+    // test deduping one of the roots
+    // x^3 - 3x^2 + x + 2.0886621075 = 0
+    let roots = solve_cubic(1.0, -3.0, 1.0, 2.0886621075);
+    assert_eq!(roots.get().len(), 2);
+    assert_approx_eq!(roots.get()[0], 1.8164966);
+    assert_approx_eq!(roots.get()[1], -0.6329931618);
 }
