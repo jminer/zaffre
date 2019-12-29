@@ -5,9 +5,7 @@ use std::ptr;
 use std::sync::Mutex;
 use std::u32;
 
-use ash::{Entry, Instance};
 use ash::extensions::khr::Win32Surface;
-use ash::prelude::VkResult;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk::*;
 use winapi::shared::windef::{*, HWND};
@@ -187,7 +185,7 @@ impl Surface {
     pub fn recreate_swapchain(&mut self) {
         unsafe {
             let globals = VULKAN_GLOBALS.lock().unwrap();
-            globals.device.logical.device_wait_idle();
+            globals.device.logical.device_wait_idle().expect("device_wait_idle() failed");
             self.swapchain = Self::create_swapchain(
                 &globals,
                 self.vulkan_surface,

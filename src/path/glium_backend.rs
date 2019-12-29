@@ -1,14 +1,11 @@
 
 use std::any::Any;
-use std::rc::Rc;
 use std::sync::Arc;
 use glium::{self, Surface};
 use glium::backend::Context;
-use glium::framebuffer::{RenderBuffer, SimpleFrameBuffer};
-use glium::texture::UncompressedFloatFormat;
 use glium::vertex::VertexBuffer;
 use glium::index::{IndexBuffer, PrimitiveType};
-use nalgebra::{Matrix4, Similarity2, Transpose, Vector1, Vector2};
+use nalgebra::{Matrix4, Transpose};
 use super::{PathBuf, SolidVertex, StrokeQuadBezierVertex};
 
 implement_vertex!(SolidVertex, position);
@@ -40,7 +37,7 @@ fn build_stroke_cache<F>(facade: &F, path: &mut PathBuf) -> Arc<GliumStrokeCache
     let mut baked_stroke = path.baked_stroke.as_mut().unwrap();
     let solid_geo = &baked_stroke.solid_geo;
     let quad_bezier_geo = &baked_stroke.quad_bezier_geo;
-    let cache: &Box<Any> = baked_stroke.backend.entry(context as *const _ as usize).or_insert_with(|| {
+    let cache: &Box<dyn Any> = baked_stroke.backend.entry(context as *const _ as usize).or_insert_with(|| {
         Box::new(Arc::new(GliumStrokeCache {
             solid: GliumBufferCache {
                 vertex_buffer: VertexBuffer::new(facade, &solid_geo.vertices).unwrap(),
@@ -54,7 +51,7 @@ fn build_stroke_cache<F>(facade: &F, path: &mut PathBuf) -> Arc<GliumStrokeCache
                                                PrimitiveType::TrianglesList,
                                                &quad_bezier_geo.indices).unwrap(),
             },
-        })) as Box<Any>
+        })) as Box<dyn Any>
     });
     cache.downcast_ref::<Arc<GliumStrokeCache>>().unwrap().clone()
 }

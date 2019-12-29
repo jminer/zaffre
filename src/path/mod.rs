@@ -1,7 +1,6 @@
 
 use std::any::Any;
 use std::collections::HashMap;
-use std::sync::Arc;
 use coordinates::*;
 use super::{Point2, QuadBezier};
 use nalgebra::{ApproxEq, Cross, origin, Norm, Vector2};
@@ -87,7 +86,7 @@ struct Geometry<T> {
 struct BakedStroke {
 	solid_geo: Geometry<SolidVertex>,
 	quad_bezier_geo: Geometry<StrokeQuadBezierVertex>,
-	backend: HashMap<usize, Box<Any>>,
+	backend: HashMap<usize, Box<dyn Any>>,
 }
 
 #[derive(Debug)]
@@ -95,7 +94,7 @@ struct BakedFill {
 	solid_geo: Geometry<SolidVertex>,
 	//quad_bezier_geo: Geometry<FillQuadBezierVertex>,
 	//cubic_bezier_geo: Geometry<FillCubicBezierVertex>,
-	backend: HashMap<usize, Box<Any>>,
+	backend: HashMap<usize, Box<dyn Any>>,
 }
 
 // It may make sense to separate out stuff into another type: BakedStrokedPath or BakedStroke. When

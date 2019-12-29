@@ -1,7 +1,7 @@
 
 use std::fmt::Debug;
 use std::ops::{Add, Div, Sub};
-use super::{LargerFloat, Point2, Rect, Vector2};
+use super::{LargerFloat, Point2, Vector2};
 use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast, Norm};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

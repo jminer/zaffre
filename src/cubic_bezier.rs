@@ -337,7 +337,7 @@ fn solve_cubic(a: f32, b: f32, c: f32, d: f32) -> Roots {
     let q_d_2 = q * (1.0 / 2.0);
 
     let delta = q * q * (1.0 / 4.0) + p_3_d_27;
-    if(delta <= 0.0) {
+    if delta <= 0.0 {
         let r = (-p_3_d_27).sqrt();
         let phi_d_3 = (-q_d_2 / r).acos() * (1.0 / 3.0);
         let two_r_d_3 = 2.0 * (-p_d_3).sqrt();

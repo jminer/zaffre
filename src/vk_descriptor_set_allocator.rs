@@ -1,4 +1,4 @@
-use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
+use ash::version::DeviceV1_0;
 use ash::vk::*;
 
 use crate::AHashMap;
@@ -57,7 +57,7 @@ impl<'a> DescriptorSetAllocator<'a> {
     pub(crate) fn allocate(&mut self) -> DescriptorSet {
         unsafe {
             let pool_index = self.pools.iter()
-                .position(|(count, p)| *count < self.pool_size)
+                .position(|(count, _)| *count < self.pool_size)
                 .unwrap_or_else(|| {
                     self.add_pool();
                     self.pools.len() - 1
