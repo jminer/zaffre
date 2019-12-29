@@ -174,24 +174,34 @@ impl Surface {
             panic!("physical device doesn't support presentation onto surface");
         }
 
-        let swapchain = Self::create_swapchain(
-            &globals,
-            vulkan_surface,
-            || unimplemented!(),
-            SwapchainKHR::null(),
-        );
-        let swapchain_images = globals.device.swapchain_loader.get_swapchain_images(swapchain)
-            .expect("failed to get swapchain images");
-
-        Self {
+        drop(globals);
+        let mut this = Self {
             hwnd,
             vulkan_surface,
-            swapchain,
+            swapchain: SwapchainKHR::null(),
+        };
+        this.recreate_swapchain();
+        this
+    }
+
+    pub fn recreate_swapchain(&mut self) {
+        unsafe {
+            let globals = VULKAN_GLOBALS.lock().unwrap();
+            globals.device.logical.device_wait_idle();
+            self.swapchain = Self::create_swapchain(
+                &globals,
+                self.vulkan_surface,
+                || unimplemented!(),
+                self.swapchain,
+            );
+            let swapchain_images = globals.device.swapchain_loader
+                .get_swapchain_images(self.swapchain)
+                .expect("failed to get swapchain images");
         }
     }
 
     // `get_surface_extent` is only used as a fallback when the surface doesn't report a size. I
-    // son't think it's needed on Windows and Linux at least.
+    // don't think it's needed on Windows and Linux at least.
     // `old_swapchain` should be SwapchainKHR::null() if there is no existing swapchain.
     unsafe fn create_swapchain<F>(
         globals: &VulkanGlobals,
@@ -214,8 +224,11 @@ impl Surface {
         //    .expect("failed to get surface formats");
 
         let best_format = *formats.iter().find(|fmt| {
-            // There are only two commonly supported formats, R8G8B8A8_SRGB and R8G8B8A8_UNORM.
-            fmt.format == Format::R8G8B8A8_SRGB && fmt.color_space == ColorSpaceKHR::SRGB_NONLINEAR
+            // There are few commonly supported formats:
+            // B8G8R8A8_SRGB and B8G8R8A8_UNORM on desktop and
+            // R8G8B8A8_SRGB and R8G8B8A8_UNORM on mobile.
+            (fmt.format == Format::R8G8B8A8_SRGB || fmt.format == Format::B8G8R8A8_SRGB) &&
+                fmt.color_space == ColorSpaceKHR::SRGB_NONLINEAR
         }).unwrap_or_else(|| &formats[0]);
         let image_count = if caps.max_image_count == 0 {
             caps.min_image_count + 1

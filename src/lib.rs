@@ -1,4 +1,5 @@
 #![feature(const_cstr_unchecked)]
+#![feature(const_transmute)]
 #![feature(non_exhaustive)]
 #![feature(re_rebalance_coherence)]
 #![feature(test)]

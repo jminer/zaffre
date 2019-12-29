@@ -8,7 +8,7 @@ use ash::{Entry, Instance};
 use ash::vk::*;
 use ash::extensions::khr::{Surface, Swapchain, Win32Surface};
 use ash::extensions::ext::DebugUtils;
-use ash::version::{EntryV1_0, InstanceV1_0};
+use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 
 use smallvec::SmallVec;
 
@@ -311,6 +311,7 @@ unsafe fn get_preferred_physical_device(
     None
 }
 
+#[cfg(windows)]
 unsafe fn get_physical_device_presentation_support(
     entry: &Entry,
     instance: &Instance,
@@ -321,6 +322,171 @@ unsafe fn get_physical_device_presentation_support(
     let surface_fn = KhrWin32SurfaceFn::load(|name|
         mem::transmute(entry.get_instance_proc_addr(instance.handle(), name.as_ptr()))
     );
-    surface_fn
-        .get_physical_device_win32_presentation_support_khr(physical_device, queue_family_index) != 0
+    surface_fn.get_physical_device_win32_presentation_support_khr(
+        physical_device, queue_family_index
+    ) != 0
+}
+
+macro_rules! include_shader {
+    ($file:expr) => {
+        {
+            let bytes = include_bytes!($file);
+            unsafe { mem::transmute(*bytes) }
+        }
+    };
+}
+
+const VERT_SHADER_SIZE: usize = include_bytes!("../target/shaders/fill.frag.spv").len();
+const VERT_SHADER: &[u32; VERT_SHADER_SIZE / 4] =
+    &include_shader!("../target/shaders/fill.frag.spv");// TODO: fix name
+
+const FRAG_SHADER_SIZE: usize = include_bytes!("../target/shaders/fill.frag.spv").len();
+const FRAG_SHADER: &[u32; FRAG_SHADER_SIZE / 4] =
+    &include_shader!("../target/shaders/fill.frag.spv");
+
+#[derive(Copy, Clone, Debug)]
+struct PipelineArgs {
+    color_attachment_format: Format,
+    // Maybe I can set this to PRESENT_SRC for swapchain images, to GENERAL for host visible images,
+    // and SHADER_READ_ONLY for GPU images?
+    color_attachment_final_layout: ImageLayout,
+    polygon_mode: PolygonMode,
+    descriptor_set: bool,
+}
+
+unsafe fn create_pipeline(device: &ash::Device, args: PipelineArgs) -> Pipeline {
+    let vertex_shader_module = device.create_shader_module(
+        &ShaderModuleCreateInfo::builder().code(VERT_SHADER), None
+    ).expect("failed to create vert shader module");
+
+    let fragment_shader_module = device.create_shader_module(
+        &ShaderModuleCreateInfo::builder().code(FRAG_SHADER), None
+    ).expect("failed to create frag shader module");
+
+    let stages = &[
+        PipelineShaderStageCreateInfo {
+            stage: ShaderStageFlags::VERTEX,
+            module: vertex_shader_module,
+            p_name: "main\0".as_ptr() as *const c_char,
+            ..Default::default()
+        },
+        PipelineShaderStageCreateInfo {
+            stage: ShaderStageFlags::FRAGMENT,
+            module: fragment_shader_module,
+            p_name: "main\0".as_ptr() as *const c_char,
+            ..Default::default()
+        },
+    ];
+
+    let vertex_input = PipelineVertexInputStateCreateInfo::builder();
+
+    let input_assembly = PipelineInputAssemblyStateCreateInfo::builder()
+        .topology(PrimitiveTopology::TRIANGLE_LIST);
+
+    let viewport = Viewport::default();
+
+    let scissor = Rect2D::default();
+
+    let viewport_state = PipelineViewportStateCreateInfo {
+        viewport_count: 1,
+        p_viewports: &viewport as *const Viewport,
+        scissor_count: 1,
+        p_scissors: &scissor as *const Rect2D,
+        ..Default::default()
+    };
+
+    let rasterization = PipelineRasterizationStateCreateInfo::builder()
+        .polygon_mode(PolygonMode::FILL) // TODO: check for and enable GPU feature?
+        .cull_mode(CullModeFlags::BACK)
+        .front_face(FrontFace::CLOCKWISE)
+        .depth_bias_enable(false)
+        .line_width(1.0);
+
+    let multisample = PipelineMultisampleStateCreateInfo::builder()
+        .rasterization_samples(SampleCountFlags::TYPE_1)
+        .sample_shading_enable(false);
+
+    let color_blend_attachments = &[
+        PipelineColorBlendAttachmentState::builder()
+        .blend_enable(true)
+        // These factors are for premultiplied textures and colors.
+        .src_color_blend_factor(BlendFactor::ONE)
+        .dst_color_blend_factor(BlendFactor::ONE_MINUS_SRC_ALPHA)
+        .src_alpha_blend_factor(BlendFactor::ONE)
+        .dst_alpha_blend_factor(BlendFactor::ONE_MINUS_SRC_ALPHA)
+        .build()
+    ];
+
+    let color_blend_state = PipelineColorBlendStateCreateInfo::builder()
+        .logic_op_enable(false)
+        .attachments(color_blend_attachments);
+
+    let dynamic_state_array = &[DynamicState::VIEWPORT, DynamicState::SCISSOR];
+    let dynamic_state = PipelineDynamicStateCreateInfo::builder()
+        .dynamic_states(dynamic_state_array);
+
+    let pipeline_layout_create_info = PipelineLayoutCreateInfo::builder();
+    // TODO: descriptor sets
+    let pipeline_layout = device.create_pipeline_layout(&pipeline_layout_create_info, None)
+        .expect("failed to create pipeline layout");
+
+    // TODO: It doesn't make much sense to create a render pass in this create_pipeline function
+    //       because if a render pass has multiple subpasses, it will usually use a different
+    //       pipeline in each subpass.
+    let attachment_descriptions = &[
+        AttachmentDescription::builder()
+        .format(args.color_attachment_format)
+        .samples(SampleCountFlags::TYPE_1)
+        .load_op(AttachmentLoadOp::LOAD) // TODO: needs to be configuable?
+        .store_op(AttachmentStoreOp::STORE)
+        .stencil_load_op(AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(AttachmentStoreOp::DONT_CARE)
+        .initial_layout(ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        .final_layout(args.color_attachment_final_layout)
+        .build()
+    ];
+
+    let color_attachment_refs = &[
+        AttachmentReference::builder()
+        .attachment(0)
+        .layout(ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        .build()
+    ];
+
+    let subpass_descriptions = &[
+        SubpassDescription::builder()
+        .pipeline_bind_point(PipelineBindPoint::GRAPHICS)
+        .color_attachments(color_attachment_refs)
+        .build()
+    ];
+
+    let render_pass_create_info = RenderPassCreateInfo::builder()
+        .attachments(attachment_descriptions)
+        .subpasses(subpass_descriptions);
+    let render_pass = device.create_render_pass(&render_pass_create_info, None)
+        .expect("failed to create render pass");
+
+    let pipeline_create_info = GraphicsPipelineCreateInfo::builder()
+        .stages(stages)
+        .vertex_input_state(&vertex_input)
+        .input_assembly_state(&input_assembly)
+        .viewport_state(&viewport_state)
+        .rasterization_state(&rasterization)
+        .multisample_state(&multisample)
+        .color_blend_state(&color_blend_state)
+        .dynamic_state(&dynamic_state)
+        .layout(pipeline_layout)
+        .render_pass(render_pass)
+        .subpass(0)
+        .build();
+
+    // TODO: use pipeline cache?
+    let pipeline =
+        device.create_graphics_pipelines(PipelineCache::null(), &[pipeline_create_info], None)
+            .expect("failed to create pipeline")[0];
+
+    device.destroy_shader_module(vertex_shader_module, None);
+    device.destroy_shader_module(fragment_shader_module, None);
+
+    pipeline
 }
