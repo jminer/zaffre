@@ -41,7 +41,7 @@ use nalgebra::{BaseFloat, Cast};
 
 pub(crate) type AHashMap<K, V> = HashMap<K, V, BuildHasherDefault<ahash::AHasher>>;
 
-trait LargerFloat: Sized {
+pub trait LargerFloat: Sized {
     type Float: BaseFloat + Cast<Self> + Cast<f32>;
 }
 
