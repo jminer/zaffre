@@ -4,6 +4,7 @@
 #![feature(test)]
 extern crate test;
 
+extern crate ahash;
 #[macro_use]
 extern crate ash;
 #[macro_use]
@@ -22,7 +23,11 @@ mod cubic_bezier;
 mod path;
 mod quad_bezier;
 mod retained;
+mod vk_descriptor_set_allocator;
 mod vk_util;
+
+use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
 
 pub use nalgebra::{Point2, Vector2};
 pub use color::Color;
@@ -33,6 +38,8 @@ pub use quad_bezier::QuadBezier;
 pub use retained::{DrawCommand, Image, Scene, Surface, ScalingMode};
 
 use nalgebra::{BaseFloat, Cast};
+
+pub(crate) type AHashMap<K, V> = HashMap<K, V, BuildHasherDefault<ahash::AHasher>>;
 
 trait LargerFloat: Sized {
     type Float: BaseFloat + Cast<Self> + Cast<f32>;

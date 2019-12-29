@@ -8,6 +8,7 @@ keywords = ["2d", "graphics"]
 license = "MPL-2.0"
 
 [dependencies]
+ahash = "0.2"
 ash = "0.28"
 glium = "0.14.0"
 #glium = { path = "../glium" }
