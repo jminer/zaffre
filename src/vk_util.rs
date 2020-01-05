@@ -31,7 +31,7 @@ pub fn str_to_c_vec<'a: 'b, 'b, A: ::smallvec::Array<Item=u8>>(s: &'a str, buf: 
 const VULKAN_VERSION: u32 = vk_make_version!(1, 0, 104);
 
 const STANDARD_VALIDATION_LAYER_NAME: &CStr =
-    unsafe { CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_LUNARG_standard_validation\0") };
+    unsafe { CStr::from_bytes_with_nul_unchecked(b"VK_LAYER_KHRONOS_validation\0") };
 
 pub struct VulkanGlobals {
     pub entry: Entry,
