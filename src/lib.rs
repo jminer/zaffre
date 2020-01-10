@@ -9,10 +9,9 @@ extern crate ash;
 #[macro_use]
 extern crate glium;
 #[macro_use]
-extern crate lazy_static;
-#[macro_use]
 extern crate nalgebra;
 extern crate num;
+extern crate once_cell;
 extern crate smallvec;
 extern crate winapi;
 

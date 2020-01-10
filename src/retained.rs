@@ -8,6 +8,7 @@ use std::u32;
 use ash::extensions::khr::Win32Surface;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk::*;
+use once_cell::sync::Lazy;
 use winapi::shared::windef::{*, HWND};
 use winapi::um::libloaderapi::GetModuleHandleW;
 
@@ -136,9 +137,7 @@ impl DrawCommand {
     }
 }
 
-lazy_static! {
-    static ref VULKAN_GLOBALS: Mutex<VulkanGlobals> = Mutex::new(create_instance());
-}
+static VULKAN_GLOBALS: Lazy<Mutex<VulkanGlobals>> = Lazy::new(|| Mutex::new(create_instance()));
 
 pub struct Surface {
     hwnd: HWND,
