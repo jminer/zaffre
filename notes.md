@@ -12,6 +12,14 @@ http://stackoverflow.com/questions/13911963/cubic-bezier-to-quadratic
 It should adaptively subdivide into as many quadratic curves as needed to so that the
 approximation isn't off by too much.
 
+Non-subdivide Bezier curve intersections:
+
+https://github.com/thelonious/kld-intersections/blob/0f0aecea6923c0042c72f514fa914cac95a72686/lib/Intersection.js
+
+Finding self-intersection of a cubic curve with a loop:
+
+https://comp.graphics.algorithms.narkive.com/tqLNEZqM/cubic-bezier-self-intersections
+
 The current plan for this library:
 
 - Filling will use the approach Blinn and Loop did in their paper. Quadratic and cubic curves will
@@ -61,6 +69,14 @@ However, it is only supported for GeForce 9xx and newer, and AMD Radeon RX Vega 
 Don't rely on vkAcquireNextImageKHR to ever block:
 
 https://www.reddit.com/r/vulkan/comments/b37762/command_queue_grows_indefinitely_on_intel_gpus/
+
+vulkan-tutorial.com and many other places I found set the srcAlphaBlendFactor to ONE and dstAlphaBlendFactor to ZERO, but that just overwrites the alpha with the src value, which is wrong. Instead, it should be a mix like (1 - (1 - srcAlpha) * (1 - dstAlpha)) but a blend factor called that doesn't exist:
+
+https://stackoverflow.com/questions/37532428/opengl-default-pipeline-alpha-blending-does-not-make-any-sense-for-the-alpha-com?rq=1
+
+# Vulkan GLSL
+
+https://github.com/KhronosGroup/GLSL/blob/master/extensions/khr/GL_KHR_vulkan_glsl.txt
 
 # sRGB to Linear Conversion and vice versa
 
