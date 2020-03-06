@@ -1,4 +1,5 @@
 
+use std::collections::HashMap;
 use std::ffi::CStr;
 use std::mem;
 use std::os::raw::{c_char, c_void};
@@ -39,6 +40,7 @@ pub struct VulkanGlobals {
     pub debug_messenger: Option<DebugUtilsMessengerEXT>,
     pub surface_loader: Surface,
     pub device: VulkanDevice,
+    pub(crate) pipelines: HashMap<PipelineArgs, (Pipeline, PipelineLayout)>,
 }
 
 pub struct VulkanDevice {
@@ -130,6 +132,7 @@ pub fn create_instance() -> VulkanGlobals {
             debug_messenger,
             surface_loader,
             device,
+            pipelines: HashMap::new(),
         }
     }
 }
@@ -344,8 +347,8 @@ const FRAG_SHADER_SIZE: usize = include_bytes!("../target/shaders/fill.frag.spv"
 const FRAG_SHADER: &[u32; FRAG_SHADER_SIZE / 4] =
     &include_shader!("../target/shaders/fill.frag.spv");
 
-#[derive(Copy, Clone, Debug)]
-struct PipelineArgs {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct PipelineArgs {
     color_attachment_format: Format,
     // Maybe I can set this to PRESENT_SRC for swapchain images, to GENERAL for host visible images,
     // and SHADER_READ_ONLY for GPU images?
@@ -354,7 +357,7 @@ struct PipelineArgs {
     descriptor_set: bool,
 }
 
-unsafe fn create_pipeline(device: &ash::Device, args: PipelineArgs) -> Pipeline {
+unsafe fn create_pipeline(device: &ash::Device, args: PipelineArgs) -> (Pipeline, PipelineLayout) {
     let vertex_shader_module = device.create_shader_module(
         &ShaderModuleCreateInfo::builder().code(VERT_SHADER), None
     ).expect("failed to create vert shader module");
@@ -488,5 +491,5 @@ unsafe fn create_pipeline(device: &ash::Device, args: PipelineArgs) -> Pipeline 
     device.destroy_shader_module(vertex_shader_module, None);
     device.destroy_shader_module(fragment_shader_module, None);
 
-    pipeline
+    (pipeline, pipeline_layout)
 }
