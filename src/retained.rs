@@ -2,8 +2,10 @@
 use std::cmp;
 use std::os::raw::c_void;
 use std::ptr;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::ops::Deref;
 use std::u32;
+use std::u64;
 
 use ash::extensions::khr::Win32Surface;
 use ash::version::{DeviceV1_0, InstanceV1_0};
@@ -13,21 +15,57 @@ use winapi::shared::windef::{*, HWND};
 use winapi::um::libloaderapi::GetModuleHandleW;
 
 use super::{Color, Point2, Rect, Size2};
-use super::vk_util::{create_instance, VulkanGlobals};
+use crate::vk_util::{create_instance, get_pipeline, PipelineArgs, VulkanGlobals};
 
 /// An image stored on the CPU.
-pub struct Image {
+pub struct ImageBuf {
 }
 
-impl Image {
-    fn size(&self) -> Size2<f64> {
+impl ImageBuf {
+    fn size(&self) -> Size2<u16> {
         unimplemented!()
     }
 }
 
+// TODO: It may be a decent idea to separate long term images into one array of descriptor sets, and
+// short term images into another array of descriptor sets.
+enum GpuImageLifetime {
+    // Long term images are ones such as icons in an app. It could potentially need to draw them the
+    // entire lifetime of the app.
+    LongTerm,
+    // Short term images are ones such as previews of images in a file chooser, images shown in a
+    // web page in a web browser, or images
+    ShortTerm,
+}
+
 /// An image stored on the GPU. On systems with unified memory between the CPU and GPU, converting
-/// from Image to a GpuImage is a noop.
+/// from `Image` to a `GpuImage` is a noop.
+pub struct GpuImageBuf {
+    vk_image: ash::vk::Image,
+    vk_image_view: ash::vk::ImageView,
+    size: Size2<u16>,
+    // TODO: should be a handle to an allocator or remove and refer to a global allocator
+    device_memory: DeviceMemory,
+    descriptior_set: DescriptorSet,
+    // The index of the descriptor in the descriptor set.
+    descriptior_set_index: u32,
+}
+
+impl GpuImageBuf {
+    fn size(&self) -> Size2<u16> {
+        unimplemented!()
+    }
+}
+
 pub struct GpuImage {
+    image_buf: Arc<GpuImageBuf>,
+    rect: Rect<u16>,
+}
+
+impl GpuImage {
+    fn size(&self) -> Size2<u16> {
+        self.image_buf.size()
+    }
 }
 
 pub struct TextLayout {
@@ -55,17 +93,17 @@ pub enum ScalingMode {
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-enum Brush {
+pub enum Brush {
     Solid(Color<f32>),
     LinearGradient(LinearGradient),
     //RadialGradient(),
     //MeshGradient(),
-    //Bitmap/Image(),
+    //Bitmap/Image(), // only support whole images (arbitrarily scaled)
 }
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-struct LinearGradient {
+pub struct LinearGradient {
     pub start_point: Point2<f64>,
     pub end_point: Point2<f64>,
     // If true, then the gradient is blended in the sRGB color space instead of using gamma-correct
@@ -93,16 +131,35 @@ pub struct GradientStop {
     pub color: Color<f32>,
 }
 
+// Vulkan (and other APIs) has no way to draw part of an image as a whole image. When you use a
+// sampler on a whole image, you can define what you get when you read outside the bounds of the
+// image, like solid black or transparent or the color of the border pixel. Bilinear filtering also
+// reads outside the bounds along the edge. This limitation makes image atlases unusable when drawn
+// scaled. A workaround I've read is to leave some transparent pixels between images in the atlas,
+// but the number of pixels necessary would depend on how much you wanted to scale it, which is hard
+// to know.
+//
+// For this reason, I'm only providing two drawing commands: `DrawCommand::Image`, that can draw
+// part of an image but can't draw it scaled, and `DrawCommand::ScaledImage`, that can draw an image
+// scaled but can't draw part of an image. And an image brush will only be able to draw a whole
+// image, not part of one.
+
 pub enum DrawCommand {
     DrawRect,
     FillRect,
     DrawPath,
     FillPath,
     Image {
-        image: Image,
-        dest_rect: Rect<f64>,
-        src_rect: Rect<f64>,
+        image: GpuImage,
+        dest_point: Point2<f64>,
+        src_rect: Rect<u16>,
         opacity: f32,
+    },
+    ScaledImage {
+        image: Arc<GpuImageBuf>,
+        dest_rect: Rect<f64>,
+        opacity: f32,
+        scaling_mode: ScalingMode,
     },
     Text(Box<str>, Rect<f64>),
 }
@@ -113,36 +170,62 @@ impl DrawCommand {
     }
 
     pub fn image(
-        image: Image,
-        dest_rect: Rect<f64>,
+        image: GpuImage,
+        dest_point: Point2<f64>,
     ) -> Self {
         let image_size = image.size();
         DrawCommand::Image {
             image,
-            dest_rect,
-            src_rect: Point2::new(0.0, 0.0) + image_size,
+            dest_point,
+            src_rect: Point2::new(0, 0) + image_size,
             opacity: 1.0,
             //scaling_mode: ScalingMode::Fit,
         }
     }
 
     pub fn image_with_options(
-        image: Image,
+        image: GpuImage,
+        dest_point: Point2<f64>,
+        src_rect: Rect<u16>,
+        opacity: f32,
+    ) -> Self {
+        DrawCommand::Image { image, dest_point, src_rect, opacity }
+    }
+
+    pub fn scaled_image(
+        image: Arc<GpuImageBuf>,
         dest_rect: Rect<f64>,
-        src_rect: Rect<f64>,
+    ) -> Self {
+        let image_size = image.size();
+        DrawCommand::ScaledImage {
+            image,
+            dest_rect,
+            opacity: 1.0,
+            scaling_mode: ScalingMode::Fit,
+        }
+    }
+
+    pub fn scaled_image_with_options(
+        image: Arc<GpuImageBuf>,
+        dest_rect: Rect<f64>,
         opacity: f32,
         scaling_mode: ScalingMode,
     ) -> Self {
-        DrawCommand::Image { image, dest_rect, src_rect, opacity }
+        DrawCommand::ScaledImage { image, dest_rect, opacity, scaling_mode }
     }
 }
 
-static VULKAN_GLOBALS: Lazy<Mutex<VulkanGlobals>> = Lazy::new(|| Mutex::new(create_instance()));
+pub(crate) static VULKAN_GLOBALS: Lazy<Mutex<VulkanGlobals>> =
+    Lazy::new(|| Mutex::new(create_instance()));
 
 pub struct Surface {
+    image: Image,
+
     hwnd: HWND,
     vulkan_surface: SurfaceKHR,
     swapchain: SwapchainKHR,
+    image_format: SurfaceFormatKHR,
+    swapchain_images: Vec<Image>,
 }
 
 impl Surface {
@@ -173,9 +256,13 @@ impl Surface {
 
         drop(globals);
         let mut this = Self {
+            image: Image::null(),
+
             hwnd,
             vulkan_surface,
             swapchain: SwapchainKHR::null(),
+            image_format: SurfaceFormatKHR::default(),
+            swapchain_images: vec![],
         };
         this.recreate_swapchain();
         this
@@ -185,13 +272,15 @@ impl Surface {
         unsafe {
             let globals = VULKAN_GLOBALS.lock().unwrap();
             globals.device.logical.device_wait_idle().expect("device_wait_idle() failed");
-            self.swapchain = Self::create_swapchain(
+            let (swapchain, image_format) = Self::create_swapchain(
                 &globals,
                 self.vulkan_surface,
                 || unimplemented!(),
                 self.swapchain,
             );
-            let swapchain_images = globals.device.swapchain_loader
+            self.swapchain = swapchain;
+            self.image_format = image_format;
+            self.swapchain_images = globals.device.swapchain_loader
                 .get_swapchain_images(self.swapchain)
                 .expect("failed to get swapchain images");
         }
@@ -205,7 +294,7 @@ impl Surface {
         surface: SurfaceKHR,
         get_surface_extent: F,
         old_swapchain: SwapchainKHR,
-    ) -> SwapchainKHR
+    ) -> (SwapchainKHR, SurfaceFormatKHR)
     where F: FnOnce() -> Extent2D,
     {
         let surface_loader = &globals.surface_loader;
@@ -268,11 +357,123 @@ impl Surface {
             .clipped(true)
             .old_swapchain(old_swapchain);
 
-        globals.device.swapchain_loader.create_swapchain(&create_info, None)
-            .expect("failed to create swapchain")
+        (globals.device.swapchain_loader.create_swapchain(&create_info, None)
+            .expect("failed to create swapchain"), best_format)
     }
 
-    pub fn draw(scene: &Scene) {
+    pub fn draw(&mut self, scene: &Scene) {
+        unsafe {
+            let globals: MutexGuard<VulkanGlobals> = VULKAN_GLOBALS.lock().unwrap();
+            let device = &*globals.device.logical;
+
+            let pipeline = 5;
+            let (pipeline, pipeline_layout) = get_pipeline(&*device, PipelineArgs {
+                color_attachment_format: self.image_format.format,
+                color_attachment_final_layout: if self.swapchain.as_raw() != 0 {
+                    ImageLayout::PRESENT_SRC_KHR
+                } else {
+                    todo!()
+                },
+                polygon_mode: PolygonMode::FILL,
+            });
+            for cmd in scene.commands.iter() {
+                match cmd {
+                    DrawCommand::DrawRect => (),
+                    DrawCommand::FillRect => (),
+                    DrawCommand::DrawPath => (),
+                    DrawCommand::FillPath => (),
+                    DrawCommand::Image { image, dest_point, src_rect, opacity } => {
+
+                    },
+                    DrawCommand::ScaledImage { image, dest_rect, opacity, scaling_mode } => {
+
+                    },
+                    DrawCommand::Text(_, _) => (),
+                }
+            }
+
+            let cmd_pool = device.create_command_pool(
+                &CommandPoolCreateInfo::builder()
+                    .queue_family_index(globals.device.queue_family_indices.graphics),
+                None)
+                .expect("failed to create command pool");
+            let cmd_buffer = device.allocate_command_buffers(
+                &CommandBufferAllocateInfo::builder()
+                    .command_pool(cmd_pool)
+                    .level(CommandBufferLevel::PRIMARY)
+                    .command_buffer_count(1))
+                .expect("failed to allocate command buffer")[0];
+
+
+            let (dst_image, dst_image_index) = if self.swapchain.as_raw() != 0 {
+                // TODO: need to use a semaphore here and block the cmd buffer submission on it
+                let fence = device.create_fence(&FenceCreateInfo::builder(), None)
+                    .expect("failed to create fence");
+                let (index, is_suboptimal) = globals.device.swapchain_loader.acquire_next_image(
+                    self.swapchain, u64::MAX, Semaphore::null(), fence)
+                    .expect("failed to acquire swapchain image");
+                device.wait_for_fences(&[fence], true, u64::MAX)
+                    .expect("failed to wait for fences");
+                if is_suboptimal {
+                    self.recreate_swapchain();
+                }
+                (self.swapchain_images[index as usize], index)
+            } else {
+                (self.image, u32::MAX)
+            };
+
+            // for each image {
+
+            //let image: GpuImage;
+            //if image.image_buf.descriptior_set.as_raw() == 0 {
+            //    let new_set = globals.images_descriptor_set_allocator.allocate();
+            //    let image_info = &[
+            //        DescriptorImageInfo::builder()
+            //            .image_view(image.image_buf.vk_image_view)
+            //            .image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            //            .build()
+            //    ];
+            //    let descriptor_writes = &[WriteDescriptorSet::builder()
+            //        .dst_set(new_set)
+            //        .dst_binding(0)
+            //        .descriptor_type(DescriptorType::STORAGE_IMAGE)
+            //        .image_info(image_info)
+            //        .build()];
+            //        device.update_descriptor_sets(descriptor_writes, &[]);
+            //    image.image_buf.descriptior_set = new_set;
+            //}
+            //let descriptor_sets = &[image.image_buf.descriptior_set];
+            //device.cmd_bind_descriptor_sets(
+            //    cmd_buffer, PipelineBindPoint::GRAPHICS, pipeline_layout, 1, descriptor_sets, &[]);
+            //    device.cmd_draw(cmd_buffer, 4, 1, 0, 0);
+
+            // }
+
+            let graphics_queue = device.get_device_queue(
+                globals.device.queue_family_indices.graphics, 0);
+            let cmd_buffers = &[cmd_buffer];
+            let submit_infos = &[
+                SubmitInfo::builder().command_buffers(cmd_buffers).build()
+            ];
+            let fence = Fence::null(); // TODO: use fence
+            device.queue_submit(graphics_queue, submit_infos, fence)
+                .expect("failed to submit command buffer");
+            device.queue_wait_idle(graphics_queue)
+                .expect("failed to wait for graphics queue idle");
+
+            if self.swapchain.as_raw() != 0 {
+                let present_queue = device.get_device_queue(
+                    globals.device.queue_family_indices.present, 0);
+                globals.device.swapchain_loader.queue_present(present_queue,
+                    &PresentInfoKHR::builder()
+                        .swapchains(&[self.swapchain])
+                        .image_indices(&[dst_image_index]))
+                    .expect("failed to present");
+                device.queue_wait_idle(present_queue)
+                    .expect("failed to wait for present queue idle");
+            }
+        }
+
     }
 }
 

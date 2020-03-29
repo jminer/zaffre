@@ -33,7 +33,7 @@ pub use coordinates::{Size2, Rect, BorderSize2};
 pub use cubic_bezier::{CubicBezier, CurveType};
 pub use path::{PathSegment, PathBuf, stencil_stroke_path};
 pub use quad_bezier::QuadBezier;
-pub use retained::{DrawCommand, Image, Scene, Surface, ScalingMode};
+pub use retained::{DrawCommand, ImageBuf, Scene, Surface, ScalingMode};
 
 use nalgebra::{BaseFloat, Cast};
 

@@ -4,6 +4,7 @@ use std::ffi::CStr;
 use std::mem;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
+use std::sync::{MutexGuard, Arc};
 
 use ash::{Entry, Instance};
 use ash::vk::*;
@@ -12,6 +13,10 @@ use ash::extensions::ext::DebugUtils;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 
 use smallvec::SmallVec;
+
+use crate::vk_descriptor_set_allocator::DescriptorSetAllocator;
+use crate::image_group::IMAGE_GROUP_SIZE;
+use crate::retained::VULKAN_GLOBALS;
 
 // TODO: I should probably put this or a type that does the same thing into a crate, since I've
 // copied it into four projects now (clear-coat, nightshade?, radiance, zaffre).
@@ -40,6 +45,8 @@ pub struct VulkanGlobals {
     pub debug_messenger: Option<DebugUtilsMessengerEXT>,
     pub surface_loader: Surface,
     pub device: VulkanDevice,
+    pub(crate) samplers_descriptor_set_allocator: DescriptorSetAllocator,
+    pub(crate) images_descriptor_set_allocator: DescriptorSetAllocator,
     pub(crate) pipelines: HashMap<PipelineArgs, (Pipeline, PipelineLayout)>,
 }
 
@@ -55,7 +62,7 @@ pub struct VulkanDevice {
     // vkGetPhysicalDeviceWaylandPresentationSupportKHR, etc.
     pub physical: PhysicalDevice,
     pub queue_family_indices: QueueFamilyIndices,
-    pub logical: ash::Device,
+    pub logical: Arc<ash::Device>,
     pub swapchain_loader: Swapchain,
 }
 
@@ -126,12 +133,34 @@ pub fn create_instance() -> VulkanGlobals {
         let surface_loader = Surface::new(&entry, &instance);
         let device = create_device(&entry, &instance);
 
+        let samplers_desc_set_layout_bindings = &[
+            DescriptorSetLayoutBinding::builder()
+                .binding(0)
+                .descriptor_type(DescriptorType::SAMPLER)
+                .descriptor_count(3)
+                .stage_flags(ShaderStageFlags::FRAGMENT)
+                .build(),
+        ];
+        let samplers_descriptor_set_allocator = DescriptorSetAllocator::new(device.logical.clone(), DescriptorSetLayoutCreateFlags::empty(), samplers_desc_set_layout_bindings, 1);
+
+        let images_desc_set_layout_bindings = &[
+            DescriptorSetLayoutBinding::builder()
+                .binding(0)
+                .descriptor_type(DescriptorType::STORAGE_IMAGE)
+                .descriptor_count(1)
+                .stage_flags(ShaderStageFlags::FRAGMENT)
+                .build(),
+        ];
+        let images_descriptor_set_allocator = DescriptorSetAllocator::new(device.logical.clone(), DescriptorSetLayoutCreateFlags::empty(), images_desc_set_layout_bindings, 16);
+
         VulkanGlobals {
             entry,
             instance,
             debug_messenger,
             surface_loader,
             device,
+            samplers_descriptor_set_allocator,
+            images_descriptor_set_allocator,
             pipelines: HashMap::new(),
         }
     }
@@ -250,9 +279,9 @@ unsafe fn create_device(
         .queue_create_infos(&queue_create_infos)
         .enabled_extension_names(&extensions)
         .enabled_features(&enabled_features);
-    let device = instance.create_device(phy_device, &device_create_info, None)
-        .expect("failed to create logical device");
-    let swapchain_loader = Swapchain::new(instance, &device);
+    let device = Arc::new(instance.create_device(phy_device, &device_create_info, None)
+        .expect("failed to create logical device"));
+    let swapchain_loader = Swapchain::new(instance, &*device);
 
     VulkanDevice {
         physical: phy_device,
@@ -347,14 +376,23 @@ const FRAG_SHADER_SIZE: usize = include_bytes!("../target/shaders/fill.frag.spv"
 const FRAG_SHADER: &[u32; FRAG_SHADER_SIZE / 4] =
     &include_shader!("../target/shaders/fill.frag.spv");
 
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct PipelineArgs {
-    color_attachment_format: Format,
+    pub(crate) color_attachment_format: Format,
     // Maybe I can set this to PRESENT_SRC for swapchain images, to GENERAL for host visible images,
     // and SHADER_READ_ONLY for GPU images?
-    color_attachment_final_layout: ImageLayout,
-    polygon_mode: PolygonMode,
-    descriptor_set: bool,
+    pub(crate) color_attachment_final_layout: ImageLayout,
+    pub(crate) polygon_mode: PolygonMode,
+}
+
+pub(crate) unsafe fn get_pipeline(device: &ash::Device, args: PipelineArgs)
+    -> (Pipeline, PipelineLayout)
+{
+    let mut globals: MutexGuard<VulkanGlobals> = VULKAN_GLOBALS.lock().unwrap();
+
+    return *globals.pipelines.entry(args).or_insert_with(
+        || create_pipeline(device, args));
 }
 
 unsafe fn create_pipeline(device: &ash::Device, args: PipelineArgs) -> (Pipeline, PipelineLayout) {

@@ -1,10 +1,11 @@
+use std::sync::Arc;
 use ash::version::DeviceV1_0;
 use ash::vk::*;
 
 use crate::AHashMap;
 
-pub(crate) struct DescriptorSetAllocator<'a> {
-    device: &'a ash::Device,
+pub(crate) struct DescriptorSetAllocator {
+    device: Arc<ash::Device>,
     layout: DescriptorSetLayout,
     pool_size: u32,
     pool_sizes: Vec<DescriptorPoolSize>,
@@ -12,9 +13,9 @@ pub(crate) struct DescriptorSetAllocator<'a> {
     pool_map: AHashMap<DescriptorSet, usize>, // maps the descriptor set to a pool index
 }
 
-impl<'a> DescriptorSetAllocator<'a> {
+impl DescriptorSetAllocator {
     pub(crate) unsafe fn new(
-        device: &'a ash::Device,
+        device: Arc<ash::Device>,
         layout_create_flags: DescriptorSetLayoutCreateFlags,
         layout_bindings: &[DescriptorSetLayoutBinding],
         pool_size: u32,
@@ -86,7 +87,7 @@ impl<'a> DescriptorSetAllocator<'a> {
     }
 }
 
-impl<'a> Drop for DescriptorSetAllocator<'a> {
+impl Drop for DescriptorSetAllocator {
     fn drop(&mut self) {
         unsafe {
             self.device.destroy_descriptor_set_layout(self.layout, None);
