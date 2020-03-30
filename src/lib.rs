@@ -21,6 +21,7 @@ mod cubic_bezier;
 mod path;
 mod quad_bezier;
 mod retained;
+mod vk_allocator;
 mod vk_descriptor_set_allocator;
 mod vk_util;
 
