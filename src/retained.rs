@@ -218,14 +218,17 @@ impl DrawCommand {
 pub(crate) static VULKAN_GLOBALS: Lazy<Mutex<VulkanGlobals>> =
     Lazy::new(|| Mutex::new(create_instance()));
 
-pub struct Surface {
-    image: Image,
-
+pub struct SwapchainSurface {
     hwnd: HWND,
     vulkan_surface: SurfaceKHR,
     swapchain: SwapchainKHR,
     image_format: SurfaceFormatKHR,
     swapchain_images: Vec<Image>,
+}
+
+pub enum Surface {
+    Image(Image, Format),
+    Swapchain(SwapchainSurface),
 }
 
 impl Surface {
@@ -255,33 +258,42 @@ impl Surface {
         }
 
         drop(globals);
-        let mut this = Self {
-            image: Image::null(),
-
+        let mut this = Self::Swapchain(SwapchainSurface {
             hwnd,
             vulkan_surface,
             swapchain: SwapchainKHR::null(),
             image_format: SurfaceFormatKHR::default(),
             swapchain_images: vec![],
-        };
+        });
         this.recreate_swapchain();
         this
     }
 
+    pub fn image_format(&self) -> Format {
+        match self {
+            Surface::Image(_, f) => *f,
+            Surface::Swapchain(SwapchainSurface { image_format, .. }) => image_format.format,
+        }
+    }
+
     pub fn recreate_swapchain(&mut self) {
         unsafe {
+            let mut swapchain_surface = match self {
+                Surface::Swapchain(s) => s,
+                _ => panic!(),
+            };
             let globals = VULKAN_GLOBALS.lock().unwrap();
             globals.device.logical.device_wait_idle().expect("device_wait_idle() failed");
             let (swapchain, image_format) = Self::create_swapchain(
                 &globals,
-                self.vulkan_surface,
+                swapchain_surface.vulkan_surface,
                 || unimplemented!(),
-                self.swapchain,
+                swapchain_surface.swapchain,
             );
-            self.swapchain = swapchain;
-            self.image_format = image_format;
-            self.swapchain_images = globals.device.swapchain_loader
-                .get_swapchain_images(self.swapchain)
+            swapchain_surface.swapchain = swapchain;
+            swapchain_surface.image_format = image_format;
+            swapchain_surface.swapchain_images = globals.device.swapchain_loader
+                .get_swapchain_images(swapchain_surface.swapchain)
                 .expect("failed to get swapchain images");
         }
     }
@@ -368,8 +380,8 @@ impl Surface {
 
             let pipeline = 5;
             let (pipeline, pipeline_layout) = get_pipeline(&*device, PipelineArgs {
-                color_attachment_format: self.image_format.format,
-                color_attachment_final_layout: if self.swapchain.as_raw() != 0 {
+                color_attachment_format: self.image_format(),
+                color_attachment_final_layout: if let Self::Swapchain(_) = self {
                     ImageLayout::PRESENT_SRC_KHR
                 } else {
                     todo!()
@@ -405,21 +417,26 @@ impl Surface {
                 .expect("failed to allocate command buffer")[0];
 
 
-            let (dst_image, dst_image_index) = if self.swapchain.as_raw() != 0 {
-                // TODO: need to use a semaphore here and block the cmd buffer submission on it
-                let fence = device.create_fence(&FenceCreateInfo::builder(), None)
-                    .expect("failed to create fence");
-                let (index, is_suboptimal) = globals.device.swapchain_loader.acquire_next_image(
-                    self.swapchain, u64::MAX, Semaphore::null(), fence)
-                    .expect("failed to acquire swapchain image");
-                device.wait_for_fences(&[fence], true, u64::MAX)
-                    .expect("failed to wait for fences");
-                if is_suboptimal {
-                    self.recreate_swapchain();
-                }
-                (self.swapchain_images[index as usize], index)
-            } else {
-                (self.image, u32::MAX)
+            let (dst_image, dst_image_index) = match self {
+                Surface::Image(image, _) => (*image, u32::MAX),
+                Surface::Swapchain(swapchain_surface) => {
+                    // TODO: need to use a semaphore here and block the cmd buffer submission on it
+                    let fence = device.create_fence(&FenceCreateInfo::builder(), None)
+                        .expect("failed to create fence");
+                    let (index, is_suboptimal) = globals.device.swapchain_loader.acquire_next_image(
+                        swapchain_surface.swapchain, u64::MAX, Semaphore::null(), fence)
+                        .expect("failed to acquire swapchain image");
+                    device.wait_for_fences(&[fence], true, u64::MAX)
+                        .expect("failed to wait for fences");
+                    if is_suboptimal {
+                        self.recreate_swapchain();
+                    }
+                    if let Surface::Swapchain(swapchain_surface) = self { // avoid two borrows
+                        (swapchain_surface.swapchain_images[index as usize], index)
+                    } else {
+                        panic!()
+                    }
+                },
             };
 
             // for each image {
@@ -461,16 +478,19 @@ impl Surface {
             device.queue_wait_idle(graphics_queue)
                 .expect("failed to wait for graphics queue idle");
 
-            if self.swapchain.as_raw() != 0 {
-                let present_queue = device.get_device_queue(
-                    globals.device.queue_family_indices.present, 0);
-                globals.device.swapchain_loader.queue_present(present_queue,
-                    &PresentInfoKHR::builder()
-                        .swapchains(&[self.swapchain])
-                        .image_indices(&[dst_image_index]))
-                    .expect("failed to present");
-                device.queue_wait_idle(present_queue)
-                    .expect("failed to wait for present queue idle");
+            match self {
+                Surface::Image(_, _) => {},
+                Surface::Swapchain(swapchain_surface) => {
+                    let present_queue = device.get_device_queue(
+                        globals.device.queue_family_indices.present, 0);
+                    globals.device.swapchain_loader.queue_present(present_queue,
+                        &PresentInfoKHR::builder()
+                            .swapchains(&[swapchain_surface.swapchain])
+                            .image_indices(&[dst_image_index]))
+                        .expect("failed to present");
+                    device.queue_wait_idle(present_queue)
+                        .expect("failed to wait for present queue idle");
+                },
             }
         }
 
@@ -480,8 +500,15 @@ impl Surface {
 impl Drop for Surface {
     fn drop(&mut self) {
         unsafe {
-            let globals = VULKAN_GLOBALS.lock().unwrap();
-            globals.surface_loader.destroy_surface(self.vulkan_surface, None);
+            match self {
+                Surface::Image(_, _) => {},
+                Surface::Swapchain(fields) => {
+                    let globals: MutexGuard<VulkanGlobals> = VULKAN_GLOBALS.lock().unwrap();
+                    // TODO: wait until drawing finished
+                    globals.device.swapchain_loader.destroy_swapchain(fields.swapchain, None);
+                    globals.surface_loader.destroy_surface(fields.vulkan_surface, None);
+                },
+            }
         }
     }
 }
