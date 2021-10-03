@@ -18,6 +18,7 @@ extern crate winapi;
 mod color;
 mod coordinates;
 mod cubic_bezier;
+mod image_group;
 mod path;
 mod quad_bezier;
 mod retained;

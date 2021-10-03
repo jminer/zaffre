@@ -1,16 +1,18 @@
 
+use std::sync::Arc;
+
 use ash::vk::*;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 
 pub struct DeviceMemoryRef {
-    memory: DeviceMemory,
-    offset: u64,
+    pub memory: DeviceMemory,
+    pub offset: u64,
 }
 
-pub struct Allocator<'a> {
-    instance: &'a ash::Instance,
+pub struct Allocator {
+    instance: Arc<ash::Instance>,
     phy_device: PhysicalDevice,
-    device: &'a ash::Device,
+    device: Arc<ash::Device>,
     // Any requested allocation larger than this is allocated directly from the driver instead of
     // from a chunk.
     large_allocation_threshold: u64,
@@ -19,7 +21,7 @@ pub struct Allocator<'a> {
     mem_type_chunks: Vec<MemoryTypeChunks>,
 }
 
-impl<'a> Allocator<'a> {
+impl Allocator {
     pub unsafe fn allocate(
         &self,
         mem_requirements: MemoryRequirements,

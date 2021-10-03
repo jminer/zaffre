@@ -3,7 +3,9 @@ use std::cmp;
 use std::os::raw::c_void;
 use std::ptr;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::atomic::AtomicBool;
 use std::ops::Deref;
+use std::slice;
 use std::u32;
 use std::u64;
 
@@ -16,14 +18,233 @@ use winapi::um::libloaderapi::GetModuleHandleW;
 
 use super::{Color, Point2, Rect, Size2};
 use crate::vk_util::{create_instance, get_pipeline, PipelineArgs, VulkanGlobals};
+use crate::vk_allocator::DeviceMemoryRef;
 
-/// An image stored on the CPU.
+pub(crate) struct ImageCopyOp {
+    cmd_buffer: CommandBuffer,
+    fence: Fence,
+}
+
+pub(crate) struct ImageStatus {
+    // Unused with buffers.
+    layout: ImageLayout,
+
+    current_op: Option<Arc<ImageCopyOp>>,
+}
+
+impl ImageStatus {
+    pub(crate) fn finish_operation(&mut self) {
+        let op = match self.current_op {
+            Some(op) => op,
+            None => return,
+        };
+
+        let globals: MutexGuard<VulkanGlobals> = VULKAN_GLOBALS.lock().unwrap();
+        globals.device.logical.wait_for_fences(&[op.fence], true, u64::MAX);
+        // TODO: free cmd_buffer and fence
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+#[allow(non_camel_case_types)]
+/// BCx formats are supported on desktops, and ETC and EAC formats on mobile.
+pub enum ImageFormat {
+    R8G8B8A8_Srgb,
+    B8G8R8A8_Srgb,
+    R16G16B16A16_Sfloat,
+
+    BC6H_SfloatBlock,
+    BC7_SrgbBlock,
+
+    ETC2_R8G8B8_SrgbBlock,
+    ETC2_R8G8B8A1_SrgbBlock,
+    ETC2_R8G8B8A8_SrgbBlock,
+}
+
+impl ImageFormat {
+    pub fn is_valid_size(self, size: Size2<u16>) -> bool {
+        match self {
+            ImageFormat::R8G8B8A8_Srgb |
+            ImageFormat::B8G8R8A8_Srgb |
+            ImageFormat::R16G16B16A16_Sfloat => true,
+
+            ImageFormat::BC6H_SfloatBlock |
+            ImageFormat::BC7_SrgbBlock |
+            ImageFormat::ETC2_R8G8B8_SrgbBlock |
+            ImageFormat::ETC2_R8G8B8A1_SrgbBlock |
+            ImageFormat::ETC2_R8G8B8A8_SrgbBlock => size.width % 4 == 0 && size.height % 4 == 0,
+            // ASTC has 4x4, 5x4, 8x6, 10x10, ..., 12x12 pixel blocks
+        }
+    }
+
+    pub fn get_byte_size(self, size: Size2<u16>) -> usize {
+        debug_assert!(self.is_valid_size(size));
+        let (width, height) = (size.width as usize, size.height as usize);
+        match self {
+            ImageFormat::R8G8B8A8_Srgb |
+            ImageFormat::B8G8R8A8_Srgb => width * height * 4,
+            ImageFormat::R16G16B16A16_Sfloat => width * height * 8,
+
+            ImageFormat::BC6H_SfloatBlock |
+            ImageFormat::BC7_SrgbBlock => (width / 4) * (height / 4) * 16,
+
+            ImageFormat::ETC2_R8G8B8_SrgbBlock |
+            ImageFormat::ETC2_R8G8B8A1_SrgbBlock => (width / 4) * (height / 4) * 8,
+
+            ImageFormat::ETC2_R8G8B8A8_SrgbBlock => (width / 4) * (height / 4) * 16,
+        }
+    }
+}
+
+/// An image stored in main memory (accessible by the CPU).
+///
+/// Warning: Dropping an `ImageBuf` will wait for any operation in progress to finish, blocking the
+/// current thread until the GPU finishes. 
 pub struct ImageBuf {
+    // Staging buffers are recommended over staging images (staging images may not support
+    // compressed formats).
+    // https://www.reddit.com/r/vulkan/comments/71k4gy/why_is_vk_image_tiling_linear_so_limited/dnchgcp/
+    buffer: Buffer,
+    format: ImageFormat,
+    size: Size2<u16>,
+    memory_ref: DeviceMemoryRef,
+    data: *mut c_void,
+    status: Mutex<ImageStatus>,
 }
 
 impl ImageBuf {
+    pub fn new(size: Size2<u16>, format: ImageFormat) -> Self {
+        unsafe {
+            let globals: MutexGuard<VulkanGlobals> = VULKAN_GLOBALS.lock().unwrap();
+            let device = &*globals.device.logical;
+
+            assert!(format.is_valid_size(size));
+            let byte_size = format.get_byte_size(size) as u64;
+            let buffer = device.create_buffer(&BufferCreateInfo::builder()
+                .size(byte_size)
+                .usage(BufferUsageFlags::TRANSFER_SRC | BufferUsageFlags::TRANSFER_DST)
+                .sharing_mode(SharingMode::EXCLUSIVE), None).expect("failed to create buffer");
+            let memory_req = device.get_buffer_memory_requirements(buffer);
+            let memory_ref = globals.allocator.allocate(memory_req,
+                MemoryPropertyFlags::HOST_VISIBLE);
+            let data = device.map_memory(memory_ref.memory, memory_ref.offset, byte_size,
+                MemoryMapFlags::empty())
+                .expect("failed to map buffer memory");
+
+            Self {
+                buffer,
+                format,
+                size,
+                memory_ref,
+                data,
+                status: Mutex::new(ImageStatus {
+                    layout: ImageLayout::UNDEFINED,
+                    current_op: None,
+                }),
+            }
+        }
+    }
+
+    fn format(&self) -> ImageFormat {
+        self.format
+    }
+
     fn size(&self) -> Size2<u16> {
-        unimplemented!()
+        self.size
+    }
+
+    // Returns a slice of the image data. If a GPU operation is currently accessing the image, this
+    // method will block until the operation finishes.
+    fn data(&self) -> &[u8] {
+        let status = self.status.lock().unwrap();
+        status.finish_operation();
+
+        slice::from_raw_parts(self.data as *const _, self.format.get_byte_size(self.size()))
+    }
+
+    // Returns a mutable slice of the image data. If a GPU operation is currently accessing the
+    // image, this method will block until the operation finishes.
+    fn data_mut(&self) -> &mut [u8] {
+        let status = self.status.lock().unwrap();
+        status.finish_operation();
+
+        slice::from_raw_parts_mut(self.data as *mut _, self.format.get_byte_size(self.size()))
+    }
+
+    // TODO: maybe this method should take a Rect to copy on both the source and destination
+    pub fn copy_to(self: Arc<ImageBuf>, dest: GpuImageBuf) {
+        assert!(dest.size() == self.size());
+        assert!(dest.format() == self.format());
+        // TODO: have to call finish_operation for both source and dest images first
+
+        // TODO: make sure to check minImageTransferGranularity is (1, 1, 1) somewhere before using
+        // transfer queue
+        // TODO: when to destroy command buffer and ImageBuf?
+        // have a global cleanup list, and in Surface::draw, go through the global cleanup?
+        unsafe {
+            let globals: MutexGuard<VulkanGlobals> = VULKAN_GLOBALS.lock().unwrap();
+            let device = &*globals.device.logical;
+            let status = self.status.lock().unwrap();
+
+            let cmd_buffer = device.allocate_command_buffers(
+                &CommandBufferAllocateInfo::builder()
+                    .command_pool(globals.graphics_command_pool)
+                    .level(CommandBufferLevel::PRIMARY)
+                    .command_buffer_count(1))
+                .expect("failed to allocate command buffer")[0];
+
+            let regions = &[BufferImageCopy::builder()
+                .buffer_offset(0)
+                .image_subresource(
+                    ImageSubresourceLayers::builder()
+                        .aspect_mask(ImageAspectFlags::COLOR)
+                        .layer_count(1)
+                        .build())
+                .image_offset(Offset3D { x: 0, y: 0, z: 0 })
+                .image_extent(Extent3D {
+                    width: self.size.width as u32,
+                    height: self.size.height as u32,
+                    depth: 1,
+                })
+                .build()];
+            // TODO: have to make sure it's the correct layout or use a memory barrier to change
+            device.cmd_copy_buffer_to_image(cmd_buffer,
+                self.buffer, dest.vk_image, ImageLayout::TRANSFER_DST_OPTIMAL, regions);
+
+            let transfer_queue = device.get_device_queue(
+                globals.device.queue_family_indices.transfer, 0);
+            let cmd_buffers = &[cmd_buffer];
+            device.queue_submit(transfer_queue, &[SubmitInfo::builder()
+                .command_buffers(cmd_buffers)
+                // TODO: set signal_semaphores so the GPU can wait on that before drawing?
+                .build()], fence)
+                .expect("failed to submit copy to transfer queue");
+        }
+    }
+
+    pub fn to_gpu_image(self: Arc<ImageBuf>) -> GpuImageBuf {
+        let gpu_image = GpuImageBuf::new(self.size, self.format);
+        self.copy_to(gpu_image);
+        gpu_image
+    }
+}
+
+impl Drop for ImageBuf {
+    fn drop(&mut self) {
+        {
+            let status = self.status.lock().unwrap();
+            status.finish_operation();
+        }
+
+        unsafe {
+            let globals: MutexGuard<VulkanGlobals> = VULKAN_GLOBALS.lock().unwrap();
+            let device = &*globals.device.logical;
+            // TODO: wait on any operation to finish
+
+            device.unmap_memory(self.memory_ref.memory);
+            globals.allocator.free(self.memory_ref);
+            device.destroy_buffer(self.buffer, None);
+        }
     }
 }
 
@@ -38,20 +259,26 @@ enum GpuImageLifetime {
     ShortTerm,
 }
 
-/// An image stored on the GPU. On systems with unified memory between the CPU and GPU, converting
-/// from `Image` to a `GpuImage` is a noop.
+/// An image stored in graphics memory (accessible by the GPU). On systems with unified memory
+/// between the CPU and GPU, converting from `ImageBuf` to a `GpuImageBuf` still copies the image
+/// because the pixels in an `ImageBuf` are defined to be row-major order in memory, but pixels in a
+/// `GpuImageBuf` are laid out in a driver-defined order for efficient access by the GPU.
 pub struct GpuImageBuf {
     vk_image: ash::vk::Image,
     vk_image_view: ash::vk::ImageView,
+    format: ImageFormat,
     size: Size2<u16>,
-    // TODO: should be a handle to an allocator or remove and refer to a global allocator
-    device_memory: DeviceMemory,
+    memory_ref: DeviceMemoryRef,
     descriptior_set: DescriptorSet,
     // The index of the descriptor in the descriptor set.
     descriptior_set_index: u32,
 }
 
 impl GpuImageBuf {
+
+    pub fn new(size: Size2<u16>, format: ImageFormat) -> Self {
+    }
+
     fn size(&self) -> Size2<u16> {
         unimplemented!()
     }
@@ -240,7 +467,7 @@ impl Surface {
         let globals = VULKAN_GLOBALS.lock().unwrap();
 
         // TODO: cache?
-        let win32_surface_loader = Win32Surface::new(&globals.entry, &globals.instance);
+        let win32_surface_loader = Win32Surface::new(&globals.entry, &*globals.instance);
         let create_info = Win32SurfaceCreateInfoKHR {
             s_type: StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
             hinstance: GetModuleHandleW(ptr::null()) as *const c_void,
@@ -404,14 +631,9 @@ impl Surface {
                 }
             }
 
-            let cmd_pool = device.create_command_pool(
-                &CommandPoolCreateInfo::builder()
-                    .queue_family_index(globals.device.queue_family_indices.graphics),
-                None)
-                .expect("failed to create command pool");
             let cmd_buffer = device.allocate_command_buffers(
                 &CommandBufferAllocateInfo::builder()
-                    .command_pool(cmd_pool)
+                    .command_pool(globals.graphics_command_pool)
                     .level(CommandBufferLevel::PRIMARY)
                     .command_buffer_count(1))
                 .expect("failed to allocate command buffer")[0];
@@ -490,6 +712,7 @@ impl Surface {
                         .expect("failed to present");
                     device.queue_wait_idle(present_queue)
                         .expect("failed to wait for present queue idle");
+                    println!("presented");
                 },
             }
         }

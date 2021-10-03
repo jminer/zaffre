@@ -16,7 +16,8 @@ use smallvec::SmallVec;
 
 use crate::vk_descriptor_set_allocator::DescriptorSetAllocator;
 use crate::image_group::IMAGE_GROUP_SIZE;
-use crate::retained::VULKAN_GLOBALS;
+use crate::retained::{ImageStatus, VULKAN_GLOBALS, ImageCopyOp};
+use crate::vk_allocator::Allocator;
 
 // TODO: I should probably put this or a type that does the same thing into a crate, since I've
 // copied it into four projects now (clear-coat, nightshade?, radiance, zaffre).
@@ -41,13 +42,17 @@ const STANDARD_VALIDATION_LAYER_NAME: &CStr =
 
 pub struct VulkanGlobals {
     pub entry: Entry,
-    pub instance: Instance,
+    pub instance: Arc<Instance>,
     pub debug_messenger: Option<DebugUtilsMessengerEXT>,
     pub surface_loader: Surface,
     pub device: VulkanDevice,
+    pub(crate) allocator: Allocator,
     pub(crate) samplers_descriptor_set_allocator: DescriptorSetAllocator,
     pub(crate) images_descriptor_set_allocator: DescriptorSetAllocator,
+    pub(crate) transfer_command_pool: CommandPool,
+    pub(crate) graphics_command_pool: CommandPool,
     pub(crate) pipelines: HashMap<PipelineArgs, (Pipeline, PipelineLayout)>,
+    pub(crate) ops: Vec<Arc<ImageCopyOp>>,
 }
 
 pub struct VulkanDevice {
@@ -121,8 +126,8 @@ pub fn create_instance() -> VulkanGlobals {
             enabled_extension_count: extensions.len() as u32,
             pp_enabled_extension_names: extensions.as_ptr() as *const *const c_char,
         };
-        let instance = entry.create_instance(&create_info, None)
-            .expect("failed to create instance");
+        let instance = Arc::new(entry.create_instance(&create_info, None)
+            .expect("failed to create instance"));
 
 
         let debug_messenger = if debug_utils_enabled {
@@ -130,8 +135,20 @@ pub fn create_instance() -> VulkanGlobals {
         } else {
             None
         };
-        let surface_loader = Surface::new(&entry, &instance);
+        let surface_loader = Surface::new(&entry, &*instance);
         let device = create_device(&entry, &instance);
+
+
+        let graphics_command_pool = device.logical.create_command_pool(
+            &CommandPoolCreateInfo::builder()
+                .queue_family_index(device.queue_family_indices.graphics),
+            None)
+            .expect("failed to create graphics command pool");
+        let transfer_command_pool = device.logical.create_command_pool(
+            &CommandPoolCreateInfo::builder()
+                .queue_family_index(device.queue_family_indices.transfer),
+            None)
+            .expect("failed to create transfer command pool");
 
         let samplers_desc_set_layout_bindings = &[
             DescriptorSetLayoutBinding::builder()
@@ -155,13 +172,24 @@ pub fn create_instance() -> VulkanGlobals {
 
         VulkanGlobals {
             entry,
-            instance,
+            instance: instance.clone(),
             debug_messenger,
             surface_loader,
             device,
+            allocator: Allocator {
+                instance: instance,
+                phy_device: device.physical,
+                device: device.logical,
+                large_allocation_threshold: 1024 * 1024,
+                chunk_size: 4 * 1024 * 1024,
+                mem_type_chunks: Vec::new(),
+            },
+            transfer_command_pool,
+            graphics_command_pool,
             samplers_descriptor_set_allocator,
             images_descriptor_set_allocator,
             pipelines: HashMap::new(),
+            ops: Vec::new(),
         }
     }
 }
