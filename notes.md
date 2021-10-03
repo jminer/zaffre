@@ -60,7 +60,7 @@ About queue families and why it is useful to use a transfer queue for transfers 
 
 https://stackoverflow.com/questions/55272626/what-is-actually-a-queue-family-in-vulkan
 
-See answer to "How are sRGB formats and the sRGB color space related?" in Vulkan spec.
+See answer to "How are sRGB formats and the sRGB color space related?" in Vulkan spec. An image with an SRGB format when read by a shader will apply the transfer function when converting the channel value to a float, and when writing it will apply the transfer function when converting the float to a channel value (to an 8-bit uint or whatever).
 
 For covering extra pixels to do antialiasing with curve rendering, this extensions is perfect:
 
@@ -76,11 +76,11 @@ vulkan-tutorial.com and many other places I found set the srcAlphaBlendFactor to
 
 https://stackoverflow.com/questions/37532428/opengl-default-pipeline-alpha-blending-does-not-make-any-sense-for-the-alpha-com?rq=1
 
-# Vulkan pipeline derivatives
+## Vulkan pipeline derivatives
 
 https://stackoverflow.com/a/59312390/69671
 
-# Vulkan descriptor set types
+## Vulkan descriptor set types
 
 I think I finally understand the difference between the different image descriptor types, although I can't really find this stuff stated explicitly anywhere.
 
@@ -89,11 +89,34 @@ I think I finally understand the difference between the different image descript
 - `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER` is used to pass a sampler and a sampled image to a shader together in one variable. It might be faster than passing them separately.
 - `VK_DESCRIPTOR_TYPE_STORAGE_IMAGE` is used to pass an image object to a shader when you don't want to use a sampler on it and just want to read the texels.
 
-# Vulkan GLSL
+## Vulkan formats PACK16/PACK32
+
+https://stackoverflow.com/questions/36098103/what-does-pack8-16-32-mean-in-vkformat-names
+
+## Vulkan formats suffixes
+
+https://docs.rs/vulkano/0.6.2/vulkano/format/index.html
+
+## Vulkan transfer queue operations
+
+https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkPipelineStageFlagBits.html
+
+> `VK_PIPELINE_STAGE_TRANSFER_BIT` specifies the following commands:
+>
+> - All copy commands, including `vkCmdCopyQueryPoolResults`
+> - `vkCmdBlitImage`
+> - `vkCmdResolveImage`
+> - All clear commands, with the exception of `vkCmdClearAttachments`
+
+## Vulkan TILING_LINEAR staging images
+
+https://www.reddit.com/r/vulkan/comments/71k4gy/why_is_vk_image_tiling_linear_so_limited/dnchgcp/
+
+## Vulkan GLSL
 
 https://github.com/KhronosGroup/GLSL/blob/master/extensions/khr/GL_KHR_vulkan_glsl.txt
 
-# sRGB to Linear Conversion and vice versa
+## sRGB to Linear Conversion and vice versa
 
 The Vulkan spec references the "sRGB EOTF" section in this spec:
 
