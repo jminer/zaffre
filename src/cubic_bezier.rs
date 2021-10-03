@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use std::ops::{Add, Div, Mul, Sub};
 use super::{Point2, Rect, LargerFloat, QuadBezier};
 use super::nalgebra::{ApproxEq, BaseFloat, Cast, cast, Matrix2, Origin};
+use super::smallvec::SmallVec;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum CurveType {
@@ -11,6 +12,24 @@ pub enum CurveType {
     SingleInflection,
     DoubleInflection,
     FormsLoop,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct LoopPoints {
+    // The first t value on the curve that intersects the second.
+    first: f32,
+    // The t value of the midpoint of the loop.
+    midpoint: f32,
+    // The second t value on the curve that intersects the first.
+    second: f32,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum CurveTypeData {
+    Plain,
+    SingleInflection(f32),
+    DoubleInflection(f32, f32),
+    FormsLoop(LoopPoints),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -43,6 +62,19 @@ impl<Nin: Copy, Nout: Copy + Cast<Nin>> Cast<CubicBezier<Nin>> for CubicBezier<N
         }
     }
 }
+
+// impl<'a, M: Copy, N: Copy + ApproxEq<Margin=M>> ApproxEq for CubicBezier<N> {
+//     type Margin = M;
+
+//     fn approx_eq<T: Into<Self::Margin>>(self, other: Self, margin: T) -> bool {
+//         let margin = margin.into();
+//         self.p0.x.approx_eq(other.p0.x, margin)
+//         self.p0.y.approx_eq(other.p0.y, margin)
+//             && self.p1.approx_eq(other.p1, margin)
+//             && self.p2.approx_eq(other.p2, margin)
+//             && self.p3.approx_eq(other.p3, margin)
+//     }
+// }
 
 impl<N> ApproxEq<N> for CubicBezier<N> where N: ApproxEq<N> {
     fn approx_epsilon(_: Option<Self>) -> N {
@@ -208,7 +240,7 @@ impl<N, F> CubicBezier<N> where F: BaseFloat
         let _18_0: N::Float = cast(18.0);
 
         let aligned = self.axis_aligned();
-        let (p0, mut p1, mut p2, mut p3) = (cast::<Point2<N>, Point2<N::Float>>(aligned.p0),
+        let (_p0, p1, p2, p3) = (cast::<Point2<N>, Point2<N::Float>>(aligned.p0),
                                             cast::<Point2<N>, Point2<N::Float>>(aligned.p1),
                                             cast::<Point2<N>, Point2<N::Float>>(aligned.p2),
                                             cast::<Point2<N>, Point2<N::Float>>(aligned.p3));
@@ -245,6 +277,26 @@ impl<N, F> CubicBezier<N> where F: BaseFloat
             (false, false) => (None, None),
         }
     }
+
+    pub fn loop_points(&self) -> LoopPoints {
+
+        unimplemented!()
+    }
+
+    // Returns a quadratic Bezier that approximates this curve. If this curve has an inflection or
+    // loop, it must be split before a quadratic Bezier can approximate it.
+    pub fn to_quad_bezier(&self) -> Option<QuadBezier<N>> {
+        unimplemented!()
+    }
+
+    pub fn get_quad_bezier_approximation(&self,
+                                         quad_beziers: &mut SmallVec<[QuadBezier<N>; 2]>,
+                                         tolerance: f32) {
+
+        unimplemented!()
+
+    }
+
     pub fn curve_type(&self) -> CurveType {
         // https://pomax.github.io/bezierinfo/#canonical
         let _0_0: N::Float = cast(0.0);
@@ -295,6 +347,18 @@ impl<N, F> CubicBezier<N> where F: BaseFloat
         }
     }
 
+    pub fn curve_type_data(&self) -> CurveTypeData {
+
+        match self.inflection_points() {
+            (Some(t0), Some(t1)) => return CurveTypeData::DoubleInflection(t0, t1),
+            (Some(t), None) => return CurveTypeData::SingleInflection(t),
+            _ => {},
+        }
+
+        // TODO: loop
+
+        CurveTypeData::Plain
+    }
 }
 
 struct Roots {
