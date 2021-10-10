@@ -4,21 +4,22 @@ use std::sync::Arc;
 use ash::vk::*;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 
+#[derive(Debug, Clone, Copy)]
 pub struct DeviceMemoryRef {
     pub memory: DeviceMemory,
     pub offset: u64,
 }
 
 pub struct Allocator {
-    instance: Arc<ash::Instance>,
-    phy_device: PhysicalDevice,
-    device: Arc<ash::Device>,
+    pub instance: Arc<ash::Instance>,
+    pub phy_device: PhysicalDevice,
+    pub device: Arc<ash::Device>,
     // Any requested allocation larger than this is allocated directly from the driver instead of
     // from a chunk.
-    large_allocation_threshold: u64,
-    chunk_size: u64,
+    pub large_allocation_threshold: u64,
+    pub chunk_size: u64,
     // There should only be one MemoryTypeChunks for each memory type.
-    mem_type_chunks: Vec<MemoryTypeChunks>,
+    pub mem_type_chunks: Vec<MemoryTypeChunks>,
 }
 
 impl Allocator {
@@ -61,7 +62,7 @@ impl Allocator {
     }
 }
 
-struct MemoryTypeChunks {
+pub struct MemoryTypeChunks {
     memory_type_index: u32,
     memory_properties: MemoryPropertyFlags,
     chunks: Vec<Chunk>,

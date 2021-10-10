@@ -1,5 +1,5 @@
 #![feature(const_cstr_unchecked)]
-#![feature(const_transmute)]
+#![feature(bench_black_box)]
 #![feature(test)]
 extern crate test;
 

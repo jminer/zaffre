@@ -169,6 +169,8 @@ pub fn create_instance() -> VulkanGlobals {
                 .build(),
         ];
         let images_descriptor_set_allocator = DescriptorSetAllocator::new(device.logical.clone(), DescriptorSetLayoutCreateFlags::empty(), images_desc_set_layout_bindings, 16);
+        let device_physical = device.physical;
+        let device_logical = device.logical.clone();
 
         VulkanGlobals {
             entry,
@@ -178,8 +180,8 @@ pub fn create_instance() -> VulkanGlobals {
             device,
             allocator: Allocator {
                 instance: instance,
-                phy_device: device.physical,
-                device: device.logical,
+                phy_device: device_physical,
+                device: device_logical,
                 large_allocation_threshold: 1024 * 1024,
                 chunk_size: 4 * 1024 * 1024,
                 mem_type_chunks: Vec::new(),

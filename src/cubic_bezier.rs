@@ -438,7 +438,8 @@ fn solve_cubic(a: f32, b: f32, c: f32, d: f32) -> Roots {
 
 #[cfg(test)]
 mod benchmarks {
-    use ::test::{black_box, Bencher};
+    use std::hint::black_box;
+    use test::bench::Bencher;
     use ::Point2;
     use super::CubicBezier;
 

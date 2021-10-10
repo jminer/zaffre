@@ -34,18 +34,20 @@ pub(crate) struct ImageStatus {
 
 impl ImageStatus {
     pub(crate) fn finish_operation(&mut self) {
-        let op = match self.current_op {
+        let op = match self.current_op.as_ref() {
             Some(op) => op,
             None => return,
         };
 
         let globals: MutexGuard<VulkanGlobals> = VULKAN_GLOBALS.lock().unwrap();
-        globals.device.logical.wait_for_fences(&[op.fence], true, u64::MAX);
-        // TODO: free cmd_buffer and fence
+        unsafe {
+            globals.device.logical.wait_for_fences(&[op.fence], true, u64::MAX);
+            // TODO: free cmd_buffer and fence
+        }
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 /// BCx formats are supported on desktops, and ETC and EAC formats on mobile.
 pub enum ImageFormat {
@@ -99,7 +101,7 @@ impl ImageFormat {
 /// An image stored in main memory (accessible by the CPU).
 ///
 /// Warning: Dropping an `ImageBuf` will wait for any operation in progress to finish, blocking the
-/// current thread until the GPU finishes. 
+/// current thread until the GPU finishes.
 pub struct ImageBuf {
     // Staging buffers are recommended over staging images (staging images may not support
     // compressed formats).
@@ -156,23 +158,27 @@ impl ImageBuf {
     // Returns a slice of the image data. If a GPU operation is currently accessing the image, this
     // method will block until the operation finishes.
     fn data(&self) -> &[u8] {
-        let status = self.status.lock().unwrap();
+        let mut status = self.status.lock().unwrap();
         status.finish_operation();
 
-        slice::from_raw_parts(self.data as *const _, self.format.get_byte_size(self.size()))
+        unsafe {
+            slice::from_raw_parts(self.data as *const _, self.format.get_byte_size(self.size()))
+        }
     }
 
     // Returns a mutable slice of the image data. If a GPU operation is currently accessing the
     // image, this method will block until the operation finishes.
     fn data_mut(&self) -> &mut [u8] {
-        let status = self.status.lock().unwrap();
+        let mut status = self.status.lock().unwrap();
         status.finish_operation();
 
-        slice::from_raw_parts_mut(self.data as *mut _, self.format.get_byte_size(self.size()))
+        unsafe {
+            slice::from_raw_parts_mut(self.data as *mut _, self.format.get_byte_size(self.size()))
+        }
     }
 
     // TODO: maybe this method should take a Rect to copy on both the source and destination
-    pub fn copy_to(self: Arc<ImageBuf>, dest: GpuImageBuf) {
+    pub fn copy_to(self: Arc<ImageBuf>, dest: &GpuImageBuf) {
         assert!(dest.size() == self.size());
         assert!(dest.format() == self.format());
         // TODO: have to call finish_operation for both source and dest images first
@@ -214,7 +220,9 @@ impl ImageBuf {
             let transfer_queue = device.get_device_queue(
                 globals.device.queue_family_indices.transfer, 0);
             let cmd_buffers = &[cmd_buffer];
-            device.queue_submit(transfer_queue, &[SubmitInfo::builder()
+            let fence = todo!();
+            device.queue_submit(transfer_queue,
+                &[SubmitInfo::builder()
                 .command_buffers(cmd_buffers)
                 // TODO: set signal_semaphores so the GPU can wait on that before drawing?
                 .build()], fence)
@@ -224,7 +232,7 @@ impl ImageBuf {
 
     pub fn to_gpu_image(self: Arc<ImageBuf>) -> GpuImageBuf {
         let gpu_image = GpuImageBuf::new(self.size, self.format);
-        self.copy_to(gpu_image);
+        self.copy_to(&gpu_image);
         gpu_image
     }
 }
@@ -232,7 +240,7 @@ impl ImageBuf {
 impl Drop for ImageBuf {
     fn drop(&mut self) {
         {
-            let status = self.status.lock().unwrap();
+            let mut status = self.status.lock().unwrap();
             status.finish_operation();
         }
 
@@ -277,10 +285,15 @@ pub struct GpuImageBuf {
 impl GpuImageBuf {
 
     pub fn new(size: Size2<u16>, format: ImageFormat) -> Self {
+        todo!()
     }
 
     fn size(&self) -> Size2<u16> {
         unimplemented!()
+    }
+
+    fn format(&self) -> ImageFormat {
+        self.format
     }
 }
 
