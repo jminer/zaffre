@@ -1,5 +1,5 @@
 
-use std::cmp;
+use std::{cmp, mem};
 use std::os::raw::c_void;
 use std::ptr;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -15,8 +15,12 @@ use ash::vk::*;
 use once_cell::sync::Lazy;
 use winapi::shared::windef::{*, HWND};
 use winapi::um::libloaderapi::GetModuleHandleW;
+use winapi::um::wingdi::{BITMAPINFO, BI_RGB, DIB_RGB_COLORS, SetDIBitsToDevice};
+use winapi::um::winuser::GetClientRect;
 
 use super::{Color, Point2, Rect, Size2};
+use crate::painter::Painter;
+use crate::tiny_skia_painter::TinySkiaPainter;
 use crate::vk_util::{create_instance, get_pipeline, PipelineArgs, VulkanGlobals};
 use crate::vk_allocator::DeviceMemoryRef;
 
@@ -458,7 +462,14 @@ impl DrawCommand {
 pub(crate) static VULKAN_GLOBALS: Lazy<Mutex<VulkanGlobals>> =
     Lazy::new(|| Mutex::new(create_instance()));
 
-pub struct SwapchainSurface {
+
+#[derive(Debug, Clone, Copy)]
+pub enum RenderingBackend {
+    Cpu,
+    Gpu,
+}
+
+pub struct VulkanSwapchainSurface {
     hwnd: HWND,
     vulkan_surface: SurfaceKHR,
     swapchain: SwapchainKHR,
@@ -466,6 +477,90 @@ pub struct SwapchainSurface {
     swapchain_images: Vec<Image>,
 }
 
+pub enum SwapchainSurface {
+    Cpu(HWND, tiny_skia::Pixmap),
+    Vulkan(VulkanSwapchainSurface),
+}
+
+impl SwapchainSurface {
+    pub unsafe fn from_hwnd(hwnd: HWND, backend_pref: RenderingBackend) -> Self {
+        Self::Cpu(hwnd, Self::create_pixmap(hwnd, None))
+    }
+
+    pub unsafe fn create_pixmap(hwnd: HWND, pixmap: Option<tiny_skia::Pixmap>)
+        -> tiny_skia::Pixmap
+    {
+        let mut rect: RECT = mem::zeroed();
+        GetClientRect(hwnd, &mut rect);
+        if let Some(pixmap) = pixmap {
+            if pixmap.width() == rect.right as u32 && pixmap.height() == rect.bottom as u32 {
+                return pixmap;
+            }
+        }
+
+        // unwrap is fine because pixmap size can't be zero
+        tiny_skia::Pixmap::new(rect.right as u32, rect.bottom as u32).unwrap()
+    }
+
+    pub unsafe fn start_painting<'a>(&'a mut self, hdc: HDC) -> Box<dyn Painter + 'a> {
+        match self {
+            SwapchainSurface::Cpu(hwnd, pixmap) => {
+                Box::new(TinySkiaPainter::new(pixmap)) as Box<dyn Painter>
+            },
+            SwapchainSurface::Vulkan(_) => todo!(),
+        }
+    }
+
+    pub unsafe fn end_painting(&mut self, hdc: HDC) {
+        match self {
+            SwapchainSurface::Cpu(hwnd, pixmap) => {
+                let mut bmi: BITMAPINFO = mem::zeroed();
+                bmi.bmiHeader.biSize = mem::size_of::<BITMAPINFO>() as u32;
+                bmi.bmiHeader.biWidth = pixmap.width() as i32;
+                bmi.bmiHeader.biHeight = -(pixmap.height() as i32);
+                bmi.bmiHeader.biPlanes = 1;
+                bmi.bmiHeader.biBitCount = 32;
+                bmi.bmiHeader.biCompression = BI_RGB;
+
+                // Swap RGB to BGR
+                // TODO: this could be much faster using SIMD
+                // _mm256_shuffle_epi8(pixels, )
+                let data = pixmap.data_mut();
+                for i in (0..data.len()).step_by(4) {
+                    let tmp = data[i];
+                    data[i] = data[i + 2];
+                    data[i + 2] = tmp;
+                }
+
+                SetDIBitsToDevice(hdc,
+                    0, 0,
+                    pixmap.width(), pixmap.height(),
+                    0, 0,
+                    0, pixmap.height(),
+                    pixmap.data().as_ptr() as *const _, &bmi, DIB_RGB_COLORS);
+            },
+            SwapchainSurface::Vulkan(_) => todo!(),
+        }
+    }
+}
+
+pub struct PaintingOp<'a> {
+    pub painter: Box<dyn Painter + 'a>,
+    swapchain_surface: &'a mut SwapchainSurface,
+}
+
+impl<'a> Drop for PaintingOp<'a> {
+    fn drop(&mut self) {
+        match self.swapchain_surface {
+            SwapchainSurface::Cpu(hwnd, pixmap) => {
+
+            },
+            SwapchainSurface::Vulkan(_) => todo!(),
+        }
+    }
+}
+
+/*
 pub enum Surface {
     Image(Image, Format),
     Swapchain(SwapchainSurface),
@@ -765,3 +860,4 @@ impl Scene {
         self.commands.clear();
     }
 }
+*/

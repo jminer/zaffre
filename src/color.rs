@@ -7,9 +7,13 @@ pub struct Color<N> {
     pub alpha: N,
 }
 
-impl<N> Color<N> {
-    pub fn new(red: N, green: N, blue: N, alpha: N) -> Self {
+impl<N: Copy> Color<N> {
+    pub fn from_rgba(red: N, green: N, blue: N, alpha: N) -> Self {
         Color { red, green, blue, alpha }
+    }
+
+    pub fn as_rgba(&self) -> (N, N, N, N) {
+        (self.red, self.green, self.blue, self.alpha)
     }
 }
 

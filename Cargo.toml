@@ -10,12 +10,17 @@ license = "MPL-2.0"
 [dependencies]
 ahash = "0.2"
 ash = "0.28"
-glium = "0.14.0"
-#glium = { path = "../glium" }
+#float-cmp = "0.5"
 nalgebra = "0.8.2"
 num = "0.1.32"
 once_cell = "1.2"
+tiny-skia = "0.6"
 smallvec = "0.1.8"
 
+#[dependencies.image]
+#version = "*"
+#default-features = false
+#features = []
+
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["libloaderapi", "windef"] }
+winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
