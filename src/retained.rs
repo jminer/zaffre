@@ -484,27 +484,29 @@ pub enum SwapchainSurface {
 
 impl SwapchainSurface {
     pub unsafe fn from_hwnd(hwnd: HWND, backend_pref: RenderingBackend) -> Self {
-        Self::Cpu(hwnd, Self::create_pixmap(hwnd, None))
-    }
-
-    pub unsafe fn create_pixmap(hwnd: HWND, pixmap: Option<tiny_skia::Pixmap>)
-        -> tiny_skia::Pixmap
-    {
         let mut rect: RECT = mem::zeroed();
         GetClientRect(hwnd, &mut rect);
-        if let Some(pixmap) = pixmap {
-            if pixmap.width() == rect.right as u32 && pixmap.height() == rect.bottom as u32 {
-                return pixmap;
-            }
+        let pixmap = tiny_skia::Pixmap::new(rect.right as u32, rect.bottom as u32).unwrap();
+
+        Self::Cpu(hwnd, pixmap)
+    }
+
+    pub unsafe fn maybe_recreate_pixmap(hwnd: HWND, pixmap: &mut tiny_skia::Pixmap) {
+        let mut rect: RECT = mem::zeroed();
+        GetClientRect(hwnd, &mut rect);
+
+        if pixmap.width() == rect.right as u32 && pixmap.height() == rect.bottom as u32 {
+            return;
         }
 
         // unwrap is fine because pixmap size can't be zero
-        tiny_skia::Pixmap::new(rect.right as u32, rect.bottom as u32).unwrap()
+        *pixmap = tiny_skia::Pixmap::new(rect.right as u32, rect.bottom as u32).unwrap();
     }
 
     pub unsafe fn start_painting<'a>(&'a mut self, hdc: HDC) -> Box<dyn Painter + 'a> {
         match self {
             SwapchainSurface::Cpu(hwnd, pixmap) => {
+                Self::maybe_recreate_pixmap(*hwnd, pixmap);
                 Box::new(TinySkiaPainter::new(pixmap)) as Box<dyn Painter>
             },
             SwapchainSurface::Vulkan(_) => todo!(),
