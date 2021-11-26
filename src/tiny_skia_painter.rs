@@ -26,11 +26,15 @@ impl<'a> TinySkiaPainter<'a> {
         &mut self.pixmap
     }
 
+    fn color_to_color(color: Color<u8>) -> tiny_skia::Color {
+        let (r, g, b, a) = color.as_rgba();
+        tiny_skia::Color::from_rgba8(r, g, b, a)
+    }
+
     fn brush_to_shader(brush: &Brush) -> Shader<'static> {
         match brush {
             Brush::Solid(color) => {
-                let (r, g, b, a) = color.as_rgba();
-                Shader::SolidColor(tiny_skia::Color::from_rgba8(r, g, b, a))
+                Shader::SolidColor(Self::color_to_color(*color))
             },
             Brush::LinearGradient => todo!(),
             Brush::RadialGradient => todo!(),
@@ -156,6 +160,10 @@ impl<'a> Painter for TinySkiaPainter<'a> {
         };
         self.pixmap
             .stroke_path(&path, &paint, &stroke, self.transform, None);
+    }
+
+    fn clear(&mut self, color: Color<u8>) {
+        self.pixmap.fill(Self::color_to_color(color))
     }
 
 }

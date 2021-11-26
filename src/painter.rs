@@ -36,6 +36,8 @@ pub trait Painter {
         style: &StrokeStyle,
     );
 
+    fn clear(&mut self, color: Color<u8>);
+
 }
 
 trait ToPath {
