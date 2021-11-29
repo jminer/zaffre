@@ -38,7 +38,7 @@ pub use cubic_bezier::{CubicBezier, CurveType};
 pub use path::{PathSegment, PathBuf, StrokeStyle};
 pub use quad_bezier::QuadBezier;
 pub use retained::{DrawCommand, ImageBuf, ScalingMode, RenderingBackend, SwapchainSurface};
-pub use painter::{AsPathIter, Brush, PainterExt};
+pub use painter::{AsPathIter, Brush, Painter, PainterExt};
 
 use nalgebra::{BaseFloat, Cast};
 
