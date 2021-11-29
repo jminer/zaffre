@@ -223,6 +223,10 @@ impl PathBuf {
 	                      x_radius: f32, y_radius: f32) {
 	}
 
+	pub fn close(&mut self) {
+        self.seg_types.push(PathSegmentType::Close);
+	}
+
 	pub fn current_point(&self) -> Option<Point2<f32>> {
 	    if self.seg_types.is_empty() {
 	        return None;
