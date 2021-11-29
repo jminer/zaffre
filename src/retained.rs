@@ -1,4 +1,6 @@
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::{cmp, mem};
 use std::os::raw::c_void;
 use std::ptr;
@@ -478,7 +480,7 @@ pub struct VulkanSwapchainSurface {
 }
 
 pub enum SwapchainSurface {
-    Cpu(HWND, tiny_skia::Pixmap),
+    Cpu(HWND, Rc<RefCell<tiny_skia::Pixmap>>),
     Vulkan(VulkanSwapchainSurface),
 }
 
@@ -488,7 +490,7 @@ impl SwapchainSurface {
         GetClientRect(hwnd, &mut rect);
         let pixmap = tiny_skia::Pixmap::new(rect.right as u32, rect.bottom as u32).unwrap();
 
-        Self::Cpu(hwnd, pixmap)
+        Self::Cpu(hwnd, Rc::new(RefCell::new(pixmap)))
     }
 
     pub unsafe fn maybe_recreate_pixmap(hwnd: HWND, pixmap: &mut tiny_skia::Pixmap) {
@@ -503,11 +505,11 @@ impl SwapchainSurface {
         *pixmap = tiny_skia::Pixmap::new(rect.right as u32, rect.bottom as u32).unwrap();
     }
 
-    pub unsafe fn start_painting<'a>(&'a mut self, hdc: HDC) -> Box<dyn Painter + 'a> {
+    pub unsafe fn start_painting<'a>(&'a mut self, hdc: HDC) -> Box<dyn Painter> {
         match self {
-            SwapchainSurface::Cpu(hwnd, pixmap) => {
-                Self::maybe_recreate_pixmap(*hwnd, pixmap);
-                Box::new(TinySkiaPainter::new(pixmap)) as Box<dyn Painter>
+            SwapchainSurface::Cpu(hwnd, pixmap_rc) => {
+                Self::maybe_recreate_pixmap(*hwnd, &mut pixmap_rc.borrow_mut());
+                Box::new(TinySkiaPainter::new(pixmap_rc.clone())) as Box<dyn Painter>
             },
             SwapchainSurface::Vulkan(_) => todo!(),
         }
@@ -515,7 +517,8 @@ impl SwapchainSurface {
 
     pub unsafe fn end_painting(&mut self, hdc: HDC) {
         match self {
-            SwapchainSurface::Cpu(hwnd, pixmap) => {
+            SwapchainSurface::Cpu(hwnd, pixmap_rc) => {
+                let mut pixmap = pixmap_rc.borrow_mut();
                 let mut bmi: BITMAPINFO = mem::zeroed();
                 bmi.bmiHeader.biSize = mem::size_of::<BITMAPINFO>() as u32;
                 bmi.bmiHeader.biWidth = pixmap.width() as i32;

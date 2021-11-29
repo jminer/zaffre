@@ -1,5 +1,7 @@
 
 use std::backtrace::Backtrace;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use tiny_skia::{Paint, PathBuilder, Pixmap, Shader, Stroke};
 
@@ -7,23 +9,19 @@ use crate::{Color, PathSegment};
 use crate::painter::{Brush, Error, Painter};
 use crate::path::{ArcSegment, LineCap, LineJoin, StrokeStyle};
 
-pub struct TinySkiaPainter<'a> {
-    pixmap: &'a mut Pixmap,
+pub struct TinySkiaPainter {
+    pixmap: Rc<RefCell<Pixmap>>,
     err: Vec<Error>,
     transform: tiny_skia::Transform,
 }
 
-impl<'a> TinySkiaPainter<'a> {
-    pub fn new(pixmap: &'a mut Pixmap) -> Self {
+impl TinySkiaPainter {
+    pub fn new(pixmap: Rc<RefCell<Pixmap>>) -> Self {
         Self {
             pixmap,
             err: Vec::new(),
             transform: tiny_skia::Transform::identity(),
         }
-    }
-
-    pub fn pixmap_mut(&mut self) -> &mut Pixmap {
-        &mut self.pixmap
     }
 
     fn color_to_color(color: Color<u8>) -> tiny_skia::Color {
@@ -114,7 +112,7 @@ impl<'a> TinySkiaPainter<'a> {
 
 }
 
-impl<'a> Painter for TinySkiaPainter<'a> {
+impl<'a> Painter for TinySkiaPainter {
     fn solid_brush(&mut self, color: Color<u8>) -> Brush {
         Brush::Solid(color)
     }
@@ -158,12 +156,13 @@ impl<'a> Painter for TinySkiaPainter<'a> {
             line_join: Self::line_join_to_line_join(style.line_join),
             dash,
         };
-        self.pixmap
-            .stroke_path(&path, &paint, &stroke, self.transform, None);
+        let mut pixmap = self.pixmap.borrow_mut();
+        pixmap.stroke_path(&path, &paint, &stroke, self.transform, None);
     }
 
     fn clear(&mut self, color: Color<u8>) {
-        self.pixmap.fill(Self::color_to_color(color))
+        let mut pixmap = self.pixmap.borrow_mut();
+        pixmap.fill(Self::color_to_color(color))
     }
 
 }
