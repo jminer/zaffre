@@ -38,6 +38,13 @@ pub trait Painter {
 
     fn clear(&mut self, color: Color<u8>);
 
+    fn save(&mut self);
+
+    fn restore(&mut self);
+
+    fn translate(&mut self, x: f64, y: f64);
+
+    fn scale(&mut self, x: f64, y: f64);
 }
 
 trait ToPath {

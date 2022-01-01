@@ -12,6 +12,7 @@ use crate::path::{ArcSegment, LineCap, LineJoin, StrokeStyle};
 pub struct TinySkiaPainter {
     pixmap: Rc<RefCell<Pixmap>>,
     err: Vec<Error>,
+    transform_stack: Vec<tiny_skia::Transform>,
     transform: tiny_skia::Transform,
 }
 
@@ -20,6 +21,7 @@ impl TinySkiaPainter {
         Self {
             pixmap,
             err: Vec::new(),
+            transform_stack: Vec::new(),
             transform: tiny_skia::Transform::identity(),
         }
     }
@@ -163,6 +165,23 @@ impl<'a> Painter for TinySkiaPainter {
     fn clear(&mut self, color: Color<u8>) {
         let mut pixmap = self.pixmap.borrow_mut();
         pixmap.fill(Self::color_to_color(color))
+    }
+
+    fn save(&mut self) {
+        self.transform_stack.push(self.transform);
+    }
+
+    fn restore(&mut self) {
+        self.transform = self.transform_stack.pop()
+            .expect("`restore` called more times than `save`");
+    }
+
+    fn translate(&mut self, x: f64, y: f64) {
+        self.transform = self.transform.post_translate(x as f32, y as f32);
+    }
+
+    fn scale(&mut self, x: f64, y: f64) {
+        self.transform = self.transform.post_scale(x as f32, y as f32);
     }
 
 }
