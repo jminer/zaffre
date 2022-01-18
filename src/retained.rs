@@ -15,10 +15,9 @@ use ash::extensions::khr::Win32Surface;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk::*;
 use once_cell::sync::Lazy;
-use winapi::shared::windef::{*, HWND};
-use winapi::um::libloaderapi::GetModuleHandleW;
-use winapi::um::wingdi::{BITMAPINFO, BI_RGB, DIB_RGB_COLORS, SetDIBitsToDevice};
-use winapi::um::winuser::GetClientRect;
+use windows::Win32::Foundation::{RECT, HWND};
+use windows::Win32::Graphics::Gdi::{HDC, BITMAPINFO, BI_RGB, SetDIBitsToDevice, DIB_RGB_COLORS};
+use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 
 use super::{Color, Point2, Rect, Size2};
 use crate::painter::Painter;
@@ -525,7 +524,7 @@ impl SwapchainSurface {
                 bmi.bmiHeader.biHeight = -(pixmap.height() as i32);
                 bmi.bmiHeader.biPlanes = 1;
                 bmi.bmiHeader.biBitCount = 32;
-                bmi.bmiHeader.biCompression = BI_RGB;
+                bmi.bmiHeader.biCompression = BI_RGB as u32;
 
                 // Swap RGB to BGR
                 // TODO: this could be much faster using SIMD

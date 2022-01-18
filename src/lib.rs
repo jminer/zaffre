@@ -12,7 +12,7 @@ extern crate num;
 extern crate once_cell;
 extern crate tiny_skia;
 extern crate smallvec;
-extern crate winapi;
+extern crate windows;
 
 mod color;
 mod coordinates;
