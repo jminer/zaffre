@@ -26,6 +26,7 @@ mod vk_descriptor_set_allocator;
 mod vk_util;
 mod painter;
 mod tiny_skia_painter;
+mod formatted_text;
 
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
@@ -34,6 +35,7 @@ pub use nalgebra::{Point2, Vector2};
 pub use color::Color;
 pub use coordinates::{Size2, Rect, BorderSize2};
 pub use cubic_bezier::{CubicBezier, CurveType};
+pub use formatted_text::{Format, FormattedText};
 pub use path::{PathSegment, PathBuf, StrokeStyle};
 pub use quad_bezier::QuadBezier;
 pub use retained::{DrawCommand, ImageBuf, ScalingMode, RenderingBackend, SwapchainSurface};
