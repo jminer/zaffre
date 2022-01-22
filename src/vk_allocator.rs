@@ -5,25 +5,25 @@ use ash::vk::*;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 
 #[derive(Debug, Clone, Copy)]
-pub struct DeviceMemoryRef {
-    pub memory: DeviceMemory,
-    pub offset: u64,
+pub(crate) struct DeviceMemoryRef {
+    pub(crate) memory: DeviceMemory,
+    pub(crate) offset: u64,
 }
 
-pub struct Allocator {
-    pub instance: Arc<ash::Instance>,
-    pub phy_device: PhysicalDevice,
-    pub device: Arc<ash::Device>,
+pub(crate) struct Allocator {
+    pub(crate) instance: Arc<ash::Instance>,
+    pub(crate) phy_device: PhysicalDevice,
+    pub(crate) device: Arc<ash::Device>,
     // Any requested allocation larger than this is allocated directly from the driver instead of
     // from a chunk.
-    pub large_allocation_threshold: u64,
-    pub chunk_size: u64,
+    pub(crate) large_allocation_threshold: u64,
+    pub(crate) chunk_size: u64,
     // There should only be one MemoryTypeChunks for each memory type.
-    pub mem_type_chunks: Vec<MemoryTypeChunks>,
+    pub(crate) mem_type_chunks: Vec<MemoryTypeChunks>,
 }
 
 impl Allocator {
-    pub unsafe fn allocate(
+    pub(crate) unsafe fn allocate(
         &self,
         mem_requirements: MemoryRequirements,
         memory_properties: MemoryPropertyFlags,
@@ -42,7 +42,7 @@ impl Allocator {
         }
     }
 
-    pub unsafe fn free(&self, mem: DeviceMemoryRef) {
+    pub(crate) unsafe fn free(&self, mem: DeviceMemoryRef) {
         self.device.free_memory(mem.memory, None);
     }
 
@@ -62,7 +62,7 @@ impl Allocator {
     }
 }
 
-pub struct MemoryTypeChunks {
+pub(crate) struct MemoryTypeChunks {
     memory_type_index: u32,
     memory_properties: MemoryPropertyFlags,
     chunks: Vec<Chunk>,

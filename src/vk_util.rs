@@ -21,7 +21,7 @@ use crate::vk_allocator::Allocator;
 
 // TODO: I should probably put this or a type that does the same thing into a crate, since I've
 // copied it into four projects now (clear-coat, nightshade?, radiance, zaffre).
-pub fn str_to_c_vec<'a: 'b, 'b, A: ::smallvec::Array<Item=u8>>(s: &'a str, buf: &'b mut SmallVec<A>) -> *const c_char {
+pub(crate) fn str_to_c_vec<'a: 'b, 'b, A: ::smallvec::Array<Item=u8>>(s: &'a str, buf: &'b mut SmallVec<A>) -> *const c_char {
     // `CString` in the std library doesn't check if the &str already ends in a null terminator
     // It allocates and pushes a 0 unconditionally. However, I can add the null to string literals
     // and avoid many allocations.
@@ -97,7 +97,7 @@ impl QueueFamilyIndices {
     }
 }
 
-pub fn create_instance() -> VulkanGlobals {
+pub(crate) fn create_instance() -> VulkanGlobals {
     unsafe {
         // TODO: when Entry::new() fails, report that Vulkan may not be installed.
         let entry = Entry::new().unwrap();
@@ -244,7 +244,7 @@ fn get_instance_extensions_list(entry: &Entry) -> (Vec<*const c_char>, bool) {
     (extensions.iter().map(|ext| ext.as_ptr()).collect(), debug_utils_enabled)
 }
 
-pub unsafe fn get_device_extensions_list(
+pub(crate) unsafe fn get_device_extensions_list(
     instance: &Instance,
     phy_device: PhysicalDevice,
 ) -> Vec<*const c_char> {

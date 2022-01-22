@@ -9,12 +9,12 @@ struct ImageGroup {
 }
 
 impl ImageGroup {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
 
         }
     }
 
-    pub fn add_image(&self) {
+    pub(crate) fn add_image(&self) {
     }
 }

@@ -313,9 +313,6 @@ impl GpuImage {
     }
 }
 
-pub struct TextLayout {
-}
-
 // After looking at Qt, WPF, and UIKit, the naming stretch, fit, and fill are mainly inspired by
 // Windows 10 background settings and UIKit. I thought "stretch" would be good, and UIKit uses "fit"
 // and "fill". Windows 10 background settings calling them simply that made me go with it. macOS
@@ -338,7 +335,7 @@ pub enum ScalingMode {
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub enum Brush {
+pub(crate) enum Brush {
     Solid(Color<f32>),
     LinearGradient(LinearGradient),
     //RadialGradient(),
@@ -542,22 +539,6 @@ impl SwapchainSurface {
                     0, 0,
                     0, pixmap.height(),
                     pixmap.data().as_ptr() as *const _, &bmi, DIB_RGB_COLORS);
-            },
-            SwapchainSurface::Vulkan(_) => todo!(),
-        }
-    }
-}
-
-pub struct PaintingOp<'a> {
-    pub painter: Box<dyn Painter + 'a>,
-    swapchain_surface: &'a mut SwapchainSurface,
-}
-
-impl<'a> Drop for PaintingOp<'a> {
-    fn drop(&mut self) {
-        match self.swapchain_surface {
-            SwapchainSurface::Cpu(hwnd, pixmap) => {
-
             },
             SwapchainSurface::Vulkan(_) => todo!(),
         }

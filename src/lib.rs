@@ -1,5 +1,6 @@
 #![feature(backtrace)]
 #![feature(bench_black_box)]
+#![deny(unreachable_pub)]
 #![feature(test)]
 extern crate test;
 
@@ -35,11 +36,13 @@ pub use nalgebra::{Point2, Vector2};
 pub use color::Color;
 pub use coordinates::{Size2, Rect, BorderSize2};
 pub use cubic_bezier::{CubicBezier, CurveType};
-pub use formatted_text::{Format, FormattedText};
+pub use formatted_text::{Format, LineStyle, FormattedText, SmallType};
 pub use path::{PathSegment, PathBuf, StrokeStyle};
 pub use quad_bezier::QuadBezier;
-pub use retained::{DrawCommand, ImageBuf, ScalingMode, RenderingBackend, SwapchainSurface};
-pub use painter::{AsPathIter, Brush, Painter, PainterExt};
+pub use retained::{DrawCommand, ImageBuf, LinearGradient, ScalingMode, RenderingBackend, SwapchainSurface};
+pub use painter::{AsPathIter, Brush, Error, Painter, PainterExt};
+pub use tiny_skia_painter::TinySkiaPainter;
+pub use vk_util::VulkanGlobals;
 
 use nalgebra::{BaseFloat, Cast};
 
