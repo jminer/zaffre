@@ -21,7 +21,7 @@ use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 
 use super::{Color, Point2, Rect, Size2};
 use crate::painter::Painter;
-use crate::tiny_skia_painter::TinySkiaPainter;
+use crate::tiny_skia_painter::{TinySkiaPainter, TinySkiaPainterByteOrder};
 use crate::vk_util::{create_instance, get_pipeline, PipelineArgs, VulkanGlobals};
 use crate::vk_allocator::DeviceMemoryRef;
 
@@ -505,7 +505,9 @@ impl SwapchainSurface {
         match self {
             SwapchainSurface::Cpu(hwnd, pixmap_rc) => {
                 Self::maybe_recreate_pixmap(*hwnd, &mut pixmap_rc.borrow_mut());
-                Box::new(TinySkiaPainter::new(pixmap_rc.clone())) as Box<dyn Painter>
+                Box::new(TinySkiaPainter::new(
+                    pixmap_rc.clone(), TinySkiaPainterByteOrder::Bgra
+                )) as Box<dyn Painter>
             },
             SwapchainSurface::Vulkan(_) => todo!(),
         }
@@ -526,12 +528,12 @@ impl SwapchainSurface {
                 // Swap RGB to BGR
                 // TODO: this could be much faster using SIMD
                 // _mm256_shuffle_epi8(pixels, )
-                let data = pixmap.data_mut();
-                for i in (0..data.len()).step_by(4) {
-                    let tmp = data[i];
-                    data[i] = data[i + 2];
-                    data[i + 2] = tmp;
-                }
+                // let data = pixmap.data_mut();
+                // for i in (0..data.len()).step_by(4) {
+                //     let tmp = data[i];
+                //     data[i] = data[i + 2];
+                //     data[i + 2] = tmp;
+                // }
 
                 SetDIBitsToDevice(hdc,
                     0, 0,

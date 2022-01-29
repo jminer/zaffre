@@ -9,32 +9,41 @@ use crate::{Color, PathSegment};
 use crate::painter::{Brush, Error, Painter};
 use crate::path::{ArcSegment, LineCap, LineJoin, StrokeStyle};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TinySkiaPainterByteOrder {
+    Rgba,
+    Bgra,
+}
+
 pub struct TinySkiaPainter {
     pixmap: Rc<RefCell<Pixmap>>,
+    byte_order: TinySkiaPainterByteOrder,
     err: Vec<Error>,
     transform_stack: Vec<tiny_skia::Transform>,
     transform: tiny_skia::Transform,
 }
 
 impl TinySkiaPainter {
-    pub fn new(pixmap: Rc<RefCell<Pixmap>>) -> Self {
+    pub fn new(pixmap: Rc<RefCell<Pixmap>>, byte_order: TinySkiaPainterByteOrder) -> Self {
         Self {
             pixmap,
+            byte_order,
             err: Vec::new(),
             transform_stack: Vec::new(),
             transform: tiny_skia::Transform::identity(),
         }
     }
 
-    fn color_to_color(color: Color<u8>) -> tiny_skia::Color {
+    fn color_to_color(color: Color<u8>, byte_order: TinySkiaPainterByteOrder) -> tiny_skia::Color {
         let (r, g, b, a) = color.as_rgba();
+        let (r, b) = if byte_order == TinySkiaPainterByteOrder::Rgba { (r, b) } else { (b, r) };
         tiny_skia::Color::from_rgba8(r, g, b, a)
     }
 
-    fn brush_to_shader(brush: &Brush) -> Shader<'static> {
+    fn brush_to_shader(brush: &Brush, byte_order: TinySkiaPainterByteOrder) -> Shader<'static> {
         match brush {
             Brush::Solid(color) => {
-                Shader::SolidColor(Self::color_to_color(*color))
+                Shader::SolidColor(Self::color_to_color(*color, byte_order))
             },
             Brush::LinearGradient => todo!(),
             Brush::RadialGradient => todo!(),
@@ -137,7 +146,7 @@ impl<'a> Painter for TinySkiaPainter {
             }
         };
         let paint = Paint {
-            shader: Self::brush_to_shader(brush),
+            shader: Self::brush_to_shader(brush, self.byte_order),
             blend_mode: tiny_skia::BlendMode::SourceOver,
             anti_alias: true,
             force_hq_pipeline: false,
@@ -164,7 +173,7 @@ impl<'a> Painter for TinySkiaPainter {
 
     fn clear(&mut self, color: Color<u8>) {
         let mut pixmap = self.pixmap.borrow_mut();
-        pixmap.fill(Self::color_to_color(color))
+        pixmap.fill(Self::color_to_color(color, self.byte_order))
     }
 
     fn save(&mut self) {
