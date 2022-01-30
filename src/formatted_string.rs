@@ -1,4 +1,5 @@
 use crate::Color;
+use crate::font::{OpenTypeFontWeight, FontStyle, FontWeight};
 
 
 #[derive(Debug, Clone, Copy)]
@@ -25,8 +26,8 @@ pub enum SmallType {
 enum FormatChange {
     FontFamily(String),
     FontSize(f32),
-    Bold(bool),
-    Italic(bool),
+    FontWeight(OpenTypeFontWeight),
+    FontStyle(FontStyle),
     Underline(LineStyle),
     Strikethrough(LineStyle),
     Overline(LineStyle),
@@ -46,8 +47,8 @@ struct FormatChangeStart {
 pub struct Format {
     font_family: String,
     font_size: f32,
-    bold: bool,
-    italic: bool,
+    font_weight: OpenTypeFontWeight,
+    font_style: FontStyle,
     underline: LineStyle,
     strikethrough: LineStyle,
     overline: LineStyle,
@@ -62,8 +63,8 @@ impl Format {
         Self {
             font_family,
             font_size,
-            bold: false,
-            italic: false,
+            font_weight: FontWeight::Normal.into(),
+            font_style: FontStyle::Normal,
             underline: LineStyle::None,
             strikethrough: LineStyle::None,
             overline: LineStyle::None,
@@ -75,13 +76,13 @@ impl Format {
     }
 }
 
-pub struct FormattedText {
+pub struct FormattedString {
     text: String,
     formatting: Vec<FormatChangeStart>,
     initial_format: Format,
 }
 
-impl FormattedText {
+impl FormattedString {
     pub fn new(font_family: String, font_size: f32) -> Self {
         Self {
             text: String::new(),
