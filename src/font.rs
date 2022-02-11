@@ -1,5 +1,8 @@
 use std::rc::Rc;
 
+use crate::backend::font_backend::{FontCollectionBackend, FontFamilyBackend, FontDescriptionBackend};
+use crate::generic_backend::{GenericFontCollectionBackend, GenericFontFamilyBackend, GenericFontDescriptionBackend};
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontWeight {
@@ -15,6 +18,8 @@ pub enum FontWeight {
     ExtraBlack = 950,
 }
 
+// usWeightClass in the OpenType OS/2 table is a u16.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OpenTypeFontWeight(pub u32);
 
@@ -23,6 +28,9 @@ impl From<FontWeight> for OpenTypeFontWeight {
         Self(weight as u32)
     }
 }
+
+// DWrite, Pango, and CSS use the word "style", Core Text and cairo use "slant", and the OpenType
+// spec refers to it as "slope" a couple places.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontStyle {
@@ -66,9 +74,9 @@ pub struct FontData {
 // in Skia, DirectWrite, or Core Text. A QFont can be created with a family name that doesn't exist,
 // but the other libraries make you query and only create an object if you get a match. DirectWrite
 // and Core Text seem to have a font metadata object and an actual font object:
-// IDWriteFont/IDWriteFontFace and CTFontDescriptor/CTFont. Skia doesn't seem to have a
-// IDWriteFont/CTFontDescriptor like object, and I don't see why it is required. I'd like to try to
-// get by without it.
+// IDWriteFont/IDWriteFontFace, CTFontDescriptor/CTFont, and PangoFontFace/PangoFont. Skia doesn't
+// seem to have a IDWriteFont/CTFontDescriptor like object. Maybe a CTFontDescriptor,
+// PangoFontDescription, and QFont are all similar.
 
 #[derive(Debug, Clone)]
 pub struct Font(Rc<FontData>);
@@ -82,25 +90,94 @@ impl Font {
 // Names for this object:
 // DirectWrite: FontCollection
 // Core Text: FontCollection
+// Pango: PangoFontMap
 // Skia: SkFontMgr
 
 #[derive(Debug, Clone)]
-struct FontCollectionData {
-
+pub struct FontCollection<B: GenericFontCollectionBackend = FontCollectionBackend> {
+    backend: B,
 }
 
-#[derive(Debug, Clone)]
-pub struct FontCollection(Rc<FontCollectionData>);
-
 impl FontCollection {
-    fn system() -> Self {
-        Self(Rc::new(todo!()))
+    pub fn system() -> Self {
+        Self {
+            backend: FontCollectionBackend::system(),
+        }
+    }
+
+    pub fn get_families(&self) -> Vec<FontFamily> {
+        todo!()
+    }
+
+    pub fn get_family(&self, name: &str) -> Option<FontFamily> {
+        todo!()
+    }
+
+    pub fn get_matching_font(&self,
+        family: &str,
+        weight: OpenTypeFontWeight,
+        style: FontStyle,
+        stretch: OpenTypeFontStretch,
+    ) -> Option<Font> {
+        todo!()
     }
 }
 
-pub struct FontFamily {
-
+pub struct FontFamily<B: GenericFontFamilyBackend = FontFamilyBackend> {
+    backend: B,
 }
+
+impl<B: GenericFontFamilyBackend> FontFamily<B> {
+    fn get_family_name(&self) -> String {
+        self.backend.get_name()
+    }
+
+    pub fn get_matching_font(&self,
+        family: &str,
+        weight: OpenTypeFontWeight,
+        style: FontStyle,
+        stretch: OpenTypeFontStretch,
+    ) -> Option<Font> {
+        todo!()
+    }
+}
+
+/// The description of a font face.
+pub struct FontDescription<B: GenericFontDescriptionBackend = FontDescriptionBackend> {
+    backend: B,
+}
+
+impl<B: GenericFontDescriptionBackend> FontDescription<B> {
+
+    // DWrite and Pango call it the "face name", and Core Text calls it the "style name". I like
+    // "style name" better, but using "style" for italic/oblique makes it confusing.
+
+    fn get_face_name(&self) -> String {
+        self.backend.get_face_name()
+    }
+
+    fn weight(&self) -> OpenTypeFontWeight {
+        self.backend.weight()
+    }
+
+    fn style(&self) -> FontStyle {
+        self.backend.style()
+    }
+
+    fn stretch(&self) -> OpenTypeFontStretch {
+        self.backend.stretch()
+    }
+
+    fn is_monospaced(&self) -> bool {
+        self.backend.is_monospaced()
+    }
+
+    fn has_color_glyphs(&self) -> bool {
+        self.backend.has_color_glyphs()
+    }
+}
+
+
 
 // To render a font with a certain family, style, and size, the app should have to create a font
 // object for it. The font atlas can be stored in the object, so when the app has control over

@@ -25,6 +25,7 @@ smallvec = "0.1.8"
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.30"
 features = [
+    "Win32_Graphics_DirectWrite",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Foundation",
     "Win32_Graphics_Gdi",

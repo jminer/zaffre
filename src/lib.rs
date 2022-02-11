@@ -31,6 +31,15 @@ mod formatted_string;
 mod text_analyzer;
 mod text_layout;
 
+mod generic_backend;
+
+#[cfg(windows)]
+#[path = "windows_backend/mod.rs"]
+pub mod backend;
+#[cfg(unix)]
+#[path = "gtk_backend/mod.rs"]
+pub mod backend;
+
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 
