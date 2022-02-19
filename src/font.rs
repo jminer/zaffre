@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use crate::backend::font_backend::{FontCollectionBackend, FontFamilyBackend, FontDescriptionBackend};
-use crate::generic_backend::{GenericFontCollectionBackend, GenericFontFamilyBackend, GenericFontDescriptionBackend};
+use crate::backend::font_backend::{FontFamilyBackend, FontDescriptionBackend, FontFunctionsBackend};
+use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend};
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,12 +71,12 @@ pub struct FontData {
 }
 
 // Implementation notes: Qt has a QFont and QRawFont, and I think a QFont isn't really like anything
-// in Skia, DirectWrite, or Core Text. A QFont can be created with a family name that doesn't exist,
-// but the other libraries make you query and only create an object if you get a match. DirectWrite
-// and Core Text seem to have a font metadata object and an actual font object:
-// IDWriteFont/IDWriteFontFace, CTFontDescriptor/CTFont, and PangoFontFace/PangoFont. Skia doesn't
-// seem to have a IDWriteFont/CTFontDescriptor like object. Maybe a CTFontDescriptor,
-// PangoFontDescription, and QFont are all similar.
+// in Skia or DirectWrite. A QFont can be created with a family name that doesn't exist, but the
+// other libraries make you query and only create an object if you get a match. DirectWrite and Core
+// Text seem to have a font metadata object and an actual font object: IDWriteFont/IDWriteFontFace,
+// CTFontDescriptor/CTFont, and PangoFontFace/PangoFont. Skia doesn't seem to have a
+// IDWriteFont/CTFontDescriptor like object. Maybe a CTFontDescriptor, PangoFontDescription, and
+// QFont are all similar.
 
 #[derive(Debug, Clone)]
 pub struct Font(Rc<FontData>);
@@ -87,57 +87,37 @@ impl Font {
 
 
 
-// Names for this object:
-// DirectWrite: FontCollection
-// Core Text: FontCollection
-// Pango: PangoFontMap
-// Skia: SkFontMgr
-
-#[derive(Debug, Clone)]
-pub struct FontCollection<B: GenericFontCollectionBackend = FontCollectionBackend> {
-    backend: B,
+pub fn get_families() -> Vec<FontFamily> {
+    FontFunctionsBackend::get_families()
 }
 
-impl FontCollection {
-    pub fn system() -> Self {
-        Self {
-            backend: FontCollectionBackend::system(),
-        }
-    }
+pub fn get_family(name: &str) -> Option<FontFamily> {
+    FontFunctionsBackend::get_family(name)
+}
 
-    pub fn get_families(&self) -> Vec<FontFamily> {
-        todo!()
-    }
-
-    pub fn get_family(&self, name: &str) -> Option<FontFamily> {
-        todo!()
-    }
-
-    pub fn get_matching_font(&self,
-        family: &str,
-        weight: OpenTypeFontWeight,
-        style: FontStyle,
-        stretch: OpenTypeFontStretch,
-    ) -> Option<Font> {
-        todo!()
-    }
+pub fn get_matching_font(
+    family: &str,
+    weight: OpenTypeFontWeight,
+    style: FontStyle,
+    stretch: OpenTypeFontStretch,
+) -> Option<Font> {
+    get_family(family).map(|f| f.get_matching_font(weight, style, stretch))
 }
 
 pub struct FontFamily<B: GenericFontFamilyBackend = FontFamilyBackend> {
-    backend: B,
+    pub(crate) backend: B,
 }
 
 impl<B: GenericFontFamilyBackend> FontFamily<B> {
-    fn get_family_name(&self) -> String {
+    pub fn get_family_name(&self) -> String { // TODO: should this be get_name()?
         self.backend.get_name()
     }
 
     pub fn get_matching_font(&self,
-        family: &str,
         weight: OpenTypeFontWeight,
         style: FontStyle,
         stretch: OpenTypeFontStretch,
-    ) -> Option<Font> {
+    ) -> Font {
         todo!()
     }
 }

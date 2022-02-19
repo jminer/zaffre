@@ -39,6 +39,7 @@ pub mod backend;
 #[cfg(unix)]
 #[path = "gtk_backend/mod.rs"]
 pub mod backend;
+mod ffi_string;
 
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;

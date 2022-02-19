@@ -1,12 +1,17 @@
 
 use std::fmt::Debug;
 
-use crate::font::{OpenTypeFontWeight, FontStyle, OpenTypeFontStretch, FontFamily};
+use crate::font::{OpenTypeFontWeight, FontStyle, OpenTypeFontStretch, FontFamily, Font};
 
-pub trait GenericFontCollectionBackend: Debug + Clone {
-    fn system() -> Self;
+pub(crate) trait GenericFontFunctionsBackend {
+    fn get_families() -> Vec<FontFamily> {
+        todo!()
+    }
 
-    //fn get_families(&self) -> Vec<FontFamily>;
+    fn get_family(name: &str) -> Option<FontFamily> {
+        todo!()
+    }
+
 }
 
 pub trait GenericFontFamilyBackend: Debug + Clone {
