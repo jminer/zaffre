@@ -31,3 +31,11 @@ pub trait GenericFontDescriptionBackend: Debug + Clone {
 
     fn has_color_glyphs(&self) -> bool;
 }
+
+pub trait GenericGlyphImageSlabBackend: Debug + Clone {
+    fn new(width: u32, height: u32) -> Self;
+}
+
+pub trait GenericGlyphPainterBackend: Debug + Clone {
+    fn new() -> Self;
+}

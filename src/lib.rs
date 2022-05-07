@@ -1,5 +1,6 @@
 #![feature(backtrace)]
 #![feature(bench_black_box)]
+#![feature(int_log)]
 #![deny(unreachable_pub)]
 #![feature(test)]
 extern crate test;
@@ -30,6 +31,7 @@ mod tiny_skia_painter;
 mod formatted_string;
 mod text_analyzer;
 mod text_layout;
+mod glyph_painter;
 
 mod generic_backend;
 
@@ -56,6 +58,7 @@ pub use retained::{DrawCommand, ImageBuf, LinearGradient, ScalingMode, Rendering
 pub use painter::{AsPathIter, Brush, Error, Painter, PainterExt};
 pub use tiny_skia_painter::TinySkiaPainter;
 pub use vk_util::VulkanGlobals;
+pub use glyph_painter::GlyphPainter;
 
 pub mod text {
     pub use crate::formatted_string::{Format, LineStyle, FormattedString, SmallType};
