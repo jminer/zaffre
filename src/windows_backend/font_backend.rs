@@ -34,16 +34,39 @@ thread_local! {
     }
 }
 
+fn get_dwrite_system_collection() -> IDWriteFontCollection {
+    unsafe {
+        DWRITE_FACTORY.with(|factory| {
+            let mut font_collection = None;
+            factory.GetSystemFontCollection(&mut font_collection, false)
+                .expect("GetSystemFontCollection() failed");
+            font_collection.unwrap() // can't be None if the expect() above passes
+        })
+    }
+}
+
+fn to_dwrite_style(style: FontStyle) -> i32 {
+    match style {
+        FontStyle::Normal => DWRITE_FONT_STYLE_NORMAL,
+        FontStyle::Italic => DWRITE_FONT_STYLE_ITALIC,
+        FontStyle::Oblique => DWRITE_FONT_STYLE_OBLIQUE,
+    }
+}
+
+fn from_dwrite_style(style: i32) -> FontStyle {
+    match style {
+        DWRITE_FONT_STYLE_NORMAL => FontStyle::Normal,
+        DWRITE_FONT_STYLE_ITALIC => FontStyle::Italic,
+        DWRITE_FONT_STYLE_OBLIQUE => FontStyle::Oblique,
+        _ => FontStyle::Normal,
+    }
+}
+
 pub(crate) struct FontFunctionsBackend;
 impl GenericFontFunctionsBackend for FontFunctionsBackend {
     fn get_families() -> Vec<crate::font::FontFamily> {
         unsafe {
-            let collection = DWRITE_FACTORY.with(|factory| {
-                let mut font_collection = None;
-                factory.GetSystemFontCollection(&mut font_collection, false)
-                    .expect("GetSystemFontCollection() failed");
-                font_collection.unwrap() // can't be None if the expect() above passes
-            });
+            let collection = get_dwrite_system_collection();
             let count = collection.GetFontFamilyCount() as usize;
             let mut families = Vec::with_capacity(count);
             for i in 0..count {
@@ -62,12 +85,7 @@ impl GenericFontFunctionsBackend for FontFunctionsBackend {
 
     fn get_family(name: &str) -> Option<crate::font::FontFamily> {
         unsafe {
-            let collection = DWRITE_FACTORY.with(|factory| {
-                let mut font_collection = None;
-                factory.GetSystemFontCollection(&mut font_collection, false)
-                    .expect("GetSystemFontCollection() failed");
-                font_collection.unwrap() // can't be None if the expect() above passes
-            });
+            let collection = get_dwrite_system_collection();
             let mut index = 0;
             let mut exists = BOOL(0);
             let wide_name = WideFfiString::<[u16; 32]>::new(name);
@@ -122,11 +140,7 @@ impl GenericFontFamilyBackend for FontFamilyBackend {
         style: FontStyle,
         stretch: OpenTypeFontStretch,
     ) -> Font {
-        let dwrite_style = match style {
-            FontStyle::Normal => DWRITE_FONT_STYLE_NORMAL,
-            FontStyle::Italic => DWRITE_FONT_STYLE_ITALIC,
-            FontStyle::Oblique => DWRITE_FONT_STYLE_OBLIQUE,
-        };
+        let dwrite_style = to_dwrite_style(style);
         unsafe {
             let dwrite_font = self.family.GetFirstMatchingFont(weight.0 as i32, stretch.0 as i32, dwrite_style)
                 .expect("GetFirstMatchingFont() failed");
@@ -150,12 +164,7 @@ pub struct FontBackend {
 impl GenericFontBackend for FontBackend {
     fn description(&self) -> FontDescription {
         unsafe {
-            let collection = DWRITE_FACTORY.with(|factory| {
-                let mut font_collection = None;
-                factory.GetSystemFontCollection(&mut font_collection, false)
-                    .expect("GetSystemFontCollection() failed");
-                font_collection.unwrap() // can't be None if the expect() above passes
-            });
+            let collection = get_dwrite_system_collection();
             let font_desc = collection.GetFontFromFontFace(&self.font_face)
                 .expect("GetFontFromFontFace() failed");
             FontDescription {
@@ -185,12 +194,7 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
 
     fn style(&self) -> FontStyle {
         unsafe {
-            match self.font_desc.GetStyle() {
-                DWRITE_FONT_STYLE_NORMAL => FontStyle::Normal,
-                DWRITE_FONT_STYLE_ITALIC => FontStyle::Italic,
-                DWRITE_FONT_STYLE_OBLIQUE => FontStyle::Oblique,
-                _ => FontStyle::Normal,
-            }
+            from_dwrite_style(self.font_desc.GetStyle())
         }
     }
 
