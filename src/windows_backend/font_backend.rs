@@ -6,14 +6,15 @@ use std::sync::Mutex;
 use once_cell::sync::Lazy;
 use smallvec::SmallVec;
 use windows::Win32::Foundation::{PWSTR, BOOL};
+use windows::Win32::Graphics::Gdi::{LOGFONTW, FIXED_PITCH};
 use windows::core::Interface;
 use windows::Win32::Graphics::DirectWrite::{
-    DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection, DWRITE_FACTORY_TYPE_SHARED, IDWriteFontFamily, IDWriteFont,
+    DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection, DWRITE_FACTORY_TYPE_SHARED, IDWriteFontFamily, IDWriteFont, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STYLE_OBLIQUE, IDWriteFontFace, IDWriteFont1, IDWriteFont2,
 };
 
 use crate::ffi_string::WideFfiString;
-use crate::font::FontFamily;
-use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend};
+use crate::font::{FontFamily, OpenTypeFontWeight, FontStyle, OpenTypeFontStretch, Font, FontDescription};
+use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend, GenericFontBackend};
 
 // There is a one-to-one correspondence between an IDWriteFont and IDWriteFontFace.
 // - IDWriteFont -> IDWriteFontFace using IDWriteFont::CreateFontFace()
@@ -115,8 +116,56 @@ impl GenericFontFamilyBackend for FontFamilyBackend {
             OsString::from_wide(&name_buf).to_string_lossy().into_owned()
         }
     }
+
+    fn get_matching_font(&self,
+        weight: OpenTypeFontWeight,
+        style: FontStyle,
+        stretch: OpenTypeFontStretch,
+    ) -> Font {
+        let dwrite_style = match style {
+            FontStyle::Normal => DWRITE_FONT_STYLE_NORMAL,
+            FontStyle::Italic => DWRITE_FONT_STYLE_ITALIC,
+            FontStyle::Oblique => DWRITE_FONT_STYLE_OBLIQUE,
+        };
+        unsafe {
+            let dwrite_font = self.family.GetFirstMatchingFont(weight.0 as i32, stretch.0 as i32, dwrite_style)
+                .expect("GetFirstMatchingFont() failed");
+            let font_face = dwrite_font.CreateFontFace().expect("CreateFontFace() failed");
+            Font {
+                backend: FontBackend {
+                    font_face,
+                }
+            }
+        }
+    }
+
+
 }
 
+#[derive(Debug, Clone)]
+pub struct FontBackend {
+    font_face: IDWriteFontFace,
+}
+
+impl GenericFontBackend for FontBackend {
+    fn description(&self) -> FontDescription {
+        unsafe {
+            let collection = DWRITE_FACTORY.with(|factory| {
+                let mut font_collection = None;
+                factory.GetSystemFontCollection(&mut font_collection, false)
+                    .expect("GetSystemFontCollection() failed");
+                font_collection.unwrap() // can't be None if the expect() above passes
+            });
+            let font_desc = collection.GetFontFromFontFace(&self.font_face)
+                .expect("GetFontFromFontFace() failed");
+            FontDescription {
+                backend: FontDescriptionBackend {
+                    font_desc
+                }
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct FontDescriptionBackend {
@@ -128,23 +177,53 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
         todo!()
     }
 
-    fn weight(&self) -> crate::font::OpenTypeFontWeight {
-        todo!()
+    fn weight(&self) -> OpenTypeFontWeight {
+        unsafe {
+            OpenTypeFontWeight(self.font_desc.GetWeight() as u32)
+        }
     }
 
-    fn style(&self) -> crate::font::FontStyle {
-        todo!()
+    fn style(&self) -> FontStyle {
+        unsafe {
+            match self.font_desc.GetStyle() {
+                DWRITE_FONT_STYLE_NORMAL => FontStyle::Normal,
+                DWRITE_FONT_STYLE_ITALIC => FontStyle::Italic,
+                DWRITE_FONT_STYLE_OBLIQUE => FontStyle::Oblique,
+                _ => FontStyle::Normal,
+            }
+        }
     }
 
-    fn stretch(&self) -> crate::font::OpenTypeFontStretch {
-        todo!()
+    fn stretch(&self) -> OpenTypeFontStretch {
+        unsafe {
+            OpenTypeFontStretch(self.font_desc.GetStretch() as u32)
+        }
     }
 
     fn is_monospaced(&self) -> bool {
-        todo!()
+        // IDWriteFont1 was added in Windows 8 and an update for Windows 7
+        let font1 = self.font_desc.cast::<IDWriteFont1>();
+        if let Ok(font1) = font1 {
+            return unsafe { font1.IsMonospacedFont().as_bool() };
+        }
+        unsafe {
+            DWRITE_FACTORY.with(|factory| {
+                let gdi_interop = factory.GetGdiInterop().expect("GetGdiInterop() failed");
+                let mut logfont: LOGFONTW = mem::zeroed();
+                let mut is_system: BOOL = BOOL(0);
+                gdi_interop.ConvertFontToLOGFONT(&self.font_desc, &mut logfont, &mut is_system)
+                    .expect("ConvertFontToLOGFONT() failed");
+                logfont.lfPitchAndFamily & 0x3 == FIXED_PITCH as u8
+            })
+        }
     }
 
     fn has_color_glyphs(&self) -> bool {
-        todo!()
+        // IDWriteFont2 was added in Windows 8.1
+        let font2 = self.font_desc.cast::<IDWriteFont2>();
+        if let Ok(font2) = font2 {
+            return unsafe { font2.IsColorFont().as_bool() };
+        }
+        false
     }
 }

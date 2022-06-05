@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use crate::backend::font_backend::{FontFamilyBackend, FontDescriptionBackend, FontFunctionsBackend};
-use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend};
+use crate::backend::font_backend::{FontFamilyBackend, FontDescriptionBackend, FontFunctionsBackend, FontBackend};
+use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend, GenericFontBackend};
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,15 +61,6 @@ impl From<FontStretch> for OpenTypeFontStretch {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct FontData {
-    family: String,
-    weight: OpenTypeFontWeight,
-    style: FontStyle,
-    stretch: OpenTypeFontStretch,
-    size: f32,
-}
-
 // Implementation notes: Qt has a QFont and QRawFont, and I think a QFont isn't really like anything
 // in Skia or DirectWrite. A QFont can be created with a family name that doesn't exist, but the
 // other libraries make you query and only create an object if you get a match. DirectWrite and Core
@@ -79,7 +70,9 @@ pub struct FontData {
 // QFont are all similar.
 
 #[derive(Debug, Clone)]
-pub struct Font(Rc<FontData>);
+pub struct Font<B: GenericFontBackend = FontBackend> {
+    pub(crate) backend: B,
+}
 
 impl Font {
 
@@ -124,7 +117,7 @@ impl<B: GenericFontFamilyBackend> FontFamily<B> {
 
 /// The description of a font face.
 pub struct FontDescription<B: GenericFontDescriptionBackend = FontDescriptionBackend> {
-    backend: B,
+    pub(crate) backend: B,
 }
 
 impl<B: GenericFontDescriptionBackend> FontDescription<B> {
