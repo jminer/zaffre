@@ -3,6 +3,32 @@ use std::rc::Rc;
 use crate::backend::font_backend::{FontFamilyBackend, FontDescriptionBackend, FontFunctionsBackend, FontBackend};
 use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend, GenericFontBackend};
 
+// Font.
+//
+// A collection of letters, numbers, punctuation, and other symbols used to set text (or related)
+// matter. Although font and typeface are often used interchangeably, font refers to the physical
+// embodiment (whether it’s a case of metal pieces or a computer file) while typeface refers to the
+// design (the way it looks). A font is what you use, and a typeface is what you see.
+//
+// Style.
+//
+// Any given variant in a type family; the equivalent of a single font or typeface.
+//
+// Typeface.
+//
+// An artistic interpretation, or design, of a collection of alphanumeric symbols. A typeface may
+// include letters, numerals, punctuation, various symbols, and more — often for multiple languages.
+// A typeface is usually grouped together in a family containing individual fonts for italic, bold,
+// condensed, and other variations of the primary design. Even though its original meaning is one
+// single style of a type design, the term is now also commonly used to describe a type family
+// (usually only with the basic styles regular, italic, bold, bold italic).
+//
+// - https://www.monotype.com/resources/studio/typography-terms
+
+// A typeface is the design of the letters. A font is the carved wood or metal pieces for the
+// printing press. A style is a design variant in a type family.
+//
+// "Font face" doesn't appear as a term at all.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontWeight {
@@ -29,11 +55,11 @@ impl From<FontWeight> for OpenTypeFontWeight {
     }
 }
 
-// DWrite, Pango, and CSS use the word "style", Core Text and cairo use "slant", and the OpenType
-// spec refers to it as "slope" a couple places.
+// DWrite, Pango, and CSS use the word "style", Core Text, cairo, and Skia use "slant", and the
+// OpenType spec refers to it as "slope" a couple places.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FontStyle {
+pub enum FontSlant {
     Normal,
     Italic,
     Oblique,
@@ -91,10 +117,10 @@ pub fn get_family(name: &str) -> Option<FontFamily> {
 pub fn get_matching_font(
     family: &str,
     weight: OpenTypeFontWeight,
-    style: FontStyle,
+    slant: FontSlant,
     stretch: OpenTypeFontStretch,
 ) -> Option<Font> {
-    get_family(family).map(|f| f.get_matching_font(weight, style, stretch))
+    get_family(family).map(|f| f.get_matching_font(weight, slant, stretch))
 }
 
 pub struct FontFamily<B: GenericFontFamilyBackend = FontFamilyBackend> {
@@ -106,9 +132,13 @@ impl<B: GenericFontFamilyBackend> FontFamily<B> {
         self.backend.get_name()
     }
 
+    pub fn get_styles(&self) -> Vec<FontDescription> {
+        self.backend.get_styles()
+    }
+
     pub fn get_matching_font(&self,
         weight: OpenTypeFontWeight,
-        style: FontStyle,
+        slant: FontSlant,
         stretch: OpenTypeFontStretch,
     ) -> Font {
         todo!()
@@ -121,20 +151,22 @@ pub struct FontDescription<B: GenericFontDescriptionBackend = FontDescriptionBac
 }
 
 impl<B: GenericFontDescriptionBackend> FontDescription<B> {
+    fn get_family_name(&self) -> String {
+        todo!()
+    }
 
-    // DWrite and Pango call it the "face name", and Core Text calls it the "style name". I like
-    // "style name" better, but using "style" for italic/oblique makes it confusing.
+    // DWrite and Pango call it the "face name", and Core Text calls it the "style name".
 
-    fn get_face_name(&self) -> String {
-        self.backend.get_face_name()
+    fn get_style_name(&self) -> String {
+        self.backend.get_style_name()
     }
 
     fn weight(&self) -> OpenTypeFontWeight {
         self.backend.weight()
     }
 
-    fn style(&self) -> FontStyle {
-        self.backend.style()
+    fn slant(&self) -> FontSlant {
+        self.backend.slant()
     }
 
     fn stretch(&self) -> OpenTypeFontStretch {

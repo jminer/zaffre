@@ -1,7 +1,7 @@
 
 use std::fmt::Debug;
 
-use crate::font::{OpenTypeFontWeight, FontStyle, OpenTypeFontStretch, FontFamily, Font, FontDescription};
+use crate::font::{OpenTypeFontWeight, FontSlant, OpenTypeFontStretch, FontFamily, Font, FontDescription};
 
 pub(crate) trait GenericFontFunctionsBackend {
     fn get_families() -> Vec<FontFamily> {
@@ -17,9 +17,11 @@ pub(crate) trait GenericFontFunctionsBackend {
 pub trait GenericFontFamilyBackend: Debug + Clone {
     fn get_name(&self) -> String;
 
+    fn get_styles(&self) -> Vec<FontDescription>;
+
     fn get_matching_font(&self,
         weight: OpenTypeFontWeight,
-        style: FontStyle,
+        slant: FontSlant,
         stretch: OpenTypeFontStretch,
     ) -> Font;
 }
@@ -29,11 +31,11 @@ pub trait GenericFontBackend: Debug + Clone {
 }
 
 pub trait GenericFontDescriptionBackend: Debug + Clone {
-    fn get_face_name(&self) -> String;
+    fn get_style_name(&self) -> String;
 
     fn weight(&self) -> OpenTypeFontWeight;
 
-    fn style(&self) -> FontStyle;
+    fn slant(&self) -> FontSlant;
 
     fn stretch(&self) -> OpenTypeFontStretch;
 

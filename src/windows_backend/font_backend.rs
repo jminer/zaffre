@@ -13,7 +13,7 @@ use windows::Win32::Graphics::DirectWrite::{
 };
 
 use crate::ffi_string::WideFfiString;
-use crate::font::{FontFamily, OpenTypeFontWeight, FontStyle, OpenTypeFontStretch, Font, FontDescription};
+use crate::font::{FontFamily, OpenTypeFontWeight, FontSlant, OpenTypeFontStretch, Font, FontDescription};
 use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend, GenericFontBackend};
 
 // There is a one-to-one correspondence between an IDWriteFont and IDWriteFontFace.
@@ -45,20 +45,20 @@ fn get_dwrite_system_collection() -> IDWriteFontCollection {
     }
 }
 
-fn to_dwrite_style(style: FontStyle) -> i32 {
+fn to_dwrite_style(style: FontSlant) -> i32 {
     match style {
-        FontStyle::Normal => DWRITE_FONT_STYLE_NORMAL,
-        FontStyle::Italic => DWRITE_FONT_STYLE_ITALIC,
-        FontStyle::Oblique => DWRITE_FONT_STYLE_OBLIQUE,
+        FontSlant::Normal => DWRITE_FONT_STYLE_NORMAL,
+        FontSlant::Italic => DWRITE_FONT_STYLE_ITALIC,
+        FontSlant::Oblique => DWRITE_FONT_STYLE_OBLIQUE,
     }
 }
 
-fn from_dwrite_style(style: i32) -> FontStyle {
+fn from_dwrite_style(style: i32) -> FontSlant {
     match style {
-        DWRITE_FONT_STYLE_NORMAL => FontStyle::Normal,
-        DWRITE_FONT_STYLE_ITALIC => FontStyle::Italic,
-        DWRITE_FONT_STYLE_OBLIQUE => FontStyle::Oblique,
-        _ => FontStyle::Normal,
+        DWRITE_FONT_STYLE_NORMAL => FontSlant::Normal,
+        DWRITE_FONT_STYLE_ITALIC => FontSlant::Italic,
+        DWRITE_FONT_STYLE_OBLIQUE => FontSlant::Oblique,
+        _ => FontSlant::Normal,
     }
 }
 
@@ -135,9 +135,13 @@ impl GenericFontFamilyBackend for FontFamilyBackend {
         }
     }
 
+    fn get_styles(&self) -> Vec<FontDescription> {
+        todo!()
+    }
+
     fn get_matching_font(&self,
         weight: OpenTypeFontWeight,
-        style: FontStyle,
+        style: FontSlant,
         stretch: OpenTypeFontStretch,
     ) -> Font {
         let dwrite_style = to_dwrite_style(style);
@@ -182,7 +186,7 @@ pub struct FontDescriptionBackend {
 }
 
 impl GenericFontDescriptionBackend for FontDescriptionBackend {
-    fn get_face_name(&self) -> String {
+    fn get_style_name(&self) -> String {
         todo!()
     }
 
@@ -192,7 +196,7 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
         }
     }
 
-    fn style(&self) -> FontStyle {
+    fn slant(&self) -> FontSlant {
         unsafe {
             from_dwrite_style(self.font_desc.GetStyle())
         }

@@ -1,5 +1,5 @@
 use crate::Color;
-use crate::font::{OpenTypeFontWeight, FontStyle, FontWeight};
+use crate::font::{OpenTypeFontWeight, FontSlant, FontWeight};
 
 
 #[derive(Debug, Clone, Copy)]
@@ -27,7 +27,7 @@ enum FormatChange {
     FontFamily(String),
     FontSize(f32),
     FontWeight(OpenTypeFontWeight),
-    FontStyle(FontStyle),
+    FontSlant(FontSlant),
     Underline(LineStyle),
     Strikethrough(LineStyle),
     Overline(LineStyle),
@@ -48,7 +48,7 @@ pub struct Format {
     font_family: String,
     font_size: f32,
     font_weight: OpenTypeFontWeight,
-    font_style: FontStyle,
+    font_slant: FontSlant,
     underline: LineStyle,
     strikethrough: LineStyle,
     overline: LineStyle,
@@ -64,7 +64,7 @@ impl Format {
             font_family,
             font_size,
             font_weight: FontWeight::Normal.into(),
-            font_style: FontStyle::Normal,
+            font_slant: FontSlant::Normal,
             underline: LineStyle::None,
             strikethrough: LineStyle::None,
             overline: LineStyle::None,
