@@ -31,6 +31,8 @@ pub trait GenericFontBackend: Debug + Clone {
 }
 
 pub trait GenericFontDescriptionBackend: Debug + Clone {
+    fn get_family_name(&self) -> String;
+
     fn get_style_name(&self) -> String;
 
     fn weight(&self) -> OpenTypeFontWeight;

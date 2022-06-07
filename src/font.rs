@@ -101,7 +101,9 @@ pub struct Font<B: GenericFontBackend = FontBackend> {
 }
 
 impl Font {
-
+    pub fn description(&self) -> FontDescription {
+        self.backend.description()
+    }
 }
 
 
@@ -151,33 +153,33 @@ pub struct FontDescription<B: GenericFontDescriptionBackend = FontDescriptionBac
 }
 
 impl<B: GenericFontDescriptionBackend> FontDescription<B> {
-    fn get_family_name(&self) -> String {
-        todo!()
+    pub fn get_family_name(&self) -> String {
+        self.backend.get_family_name()
     }
 
     // DWrite and Pango call it the "face name", and Core Text calls it the "style name".
 
-    fn get_style_name(&self) -> String {
+    pub fn get_style_name(&self) -> String {
         self.backend.get_style_name()
     }
 
-    fn weight(&self) -> OpenTypeFontWeight {
+    pub fn weight(&self) -> OpenTypeFontWeight {
         self.backend.weight()
     }
 
-    fn slant(&self) -> FontSlant {
+    pub fn slant(&self) -> FontSlant {
         self.backend.slant()
     }
 
-    fn stretch(&self) -> OpenTypeFontStretch {
+    pub fn stretch(&self) -> OpenTypeFontStretch {
         self.backend.stretch()
     }
 
-    fn is_monospaced(&self) -> bool {
+    pub fn is_monospaced(&self) -> bool {
         self.backend.is_monospaced()
     }
 
-    fn has_color_glyphs(&self) -> bool {
+    pub fn has_color_glyphs(&self) -> bool {
         self.backend.has_color_glyphs()
     }
 }

@@ -9,7 +9,7 @@ use windows::Win32::Foundation::{PWSTR, BOOL};
 use windows::Win32::Graphics::Gdi::{LOGFONTW, FIXED_PITCH};
 use windows::core::Interface;
 use windows::Win32::Graphics::DirectWrite::{
-    DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection, DWRITE_FACTORY_TYPE_SHARED, IDWriteFontFamily, IDWriteFont, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STYLE_OBLIQUE, IDWriteFontFace, IDWriteFont1, IDWriteFont2,
+    DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection, DWRITE_FACTORY_TYPE_SHARED, IDWriteFontFamily, IDWriteFont, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STYLE_OBLIQUE, IDWriteFontFace, IDWriteFont1, IDWriteFont2, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_NORMAL, IDWriteLocalizedStrings,
 };
 
 use crate::ffi_string::WideFfiString;
@@ -59,6 +59,38 @@ fn from_dwrite_style(style: i32) -> FontSlant {
         DWRITE_FONT_STYLE_ITALIC => FontSlant::Italic,
         DWRITE_FONT_STYLE_OBLIQUE => FontSlant::Oblique,
         _ => FontSlant::Normal,
+    }
+}
+
+struct DWriteLocalizedStringsUtil(IDWriteLocalizedStrings);
+
+impl DWriteLocalizedStringsUtil {
+    fn find_locale(&self, name: &str) -> Option<u32> {
+        unsafe {
+            let mut index = 0;
+            let mut exists = BOOL(0);
+            let wide_locale = WideFfiString::<[u16; 32]>::new(name);
+            self.0.FindLocaleName(&wide_locale, &mut index, &mut exists)
+                .expect("FindLocaleName() failed");
+            return if exists.as_bool() {
+                Some(index)
+            } else {
+                None
+            };
+        }
+    }
+
+    fn get_string(&self, index: u32) -> String {
+        unsafe {
+            let name_len = self.0.GetStringLength(index)
+                .expect("GetStringLength() failed") as usize;
+            let mut name_buf = SmallVec::<[u16; 32]>::new();
+            name_buf.reserve_exact(name_len + 1); // +1 for null term
+            self.0.GetString(index, PWSTR(name_buf.as_mut_ptr()), name_buf.capacity() as u32)
+                .expect("GetString() failed");
+            name_buf.set_len(name_len);
+            OsString::from_wide(&name_buf).to_string_lossy().into_owned()
+        }
     }
 }
 
@@ -115,28 +147,30 @@ pub struct FontFamilyBackend {
 impl GenericFontFamilyBackend for FontFamilyBackend {
     fn get_name(&self) -> String {
         unsafe {
-            let names = self.family.GetFamilyNames()
-                .expect("GetFamilyNames() failed");
-            let mut index = 0;
-            let mut exists = BOOL(0);
-            let wide_locale = WideFfiString::<[u16; 32]>::new("en-us");
-            names.FindLocaleName(&wide_locale, &mut index, &mut exists)
-                .expect("FindLocaleName() failed");
-            if !exists.as_bool() {
-                index = 0;
-            }
-            let name_len = names.GetStringLength(index).expect("GetStringLength() failed") as usize;
-            let mut name_buf = SmallVec::<[u16; 32]>::new();
-            name_buf.reserve_exact(name_len + 1); // +1 for null term
-            names.GetString(index, PWSTR(name_buf.as_mut_ptr()), name_buf.capacity() as u32)
-                .expect("GetString() failed");
-            name_buf.set_len(name_len);
-            OsString::from_wide(&name_buf).to_string_lossy().into_owned()
+            let names = DWriteLocalizedStringsUtil(self.family.GetFamilyNames()
+                .expect("GetFamilyNames() failed"));
+            let index = names.find_locale("en-us").unwrap_or(0);
+            names.get_string(index)
         }
     }
 
     fn get_styles(&self) -> Vec<FontDescription> {
-        todo!()
+        unsafe {
+            let mut styles = Vec::new();
+            let font_list = self.family.GetMatchingFonts(
+                DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL)
+                .expect("IDWriteFontFamily.GetMatchingFonts() failed");
+            for i in 0..font_list.GetFontCount() {
+                let dwrite_font = font_list.GetFont(i)
+                    .expect("IDWriteFontList.GetFont() failed");
+                styles.push(FontDescription {
+                    backend: FontDescriptionBackend {
+                        font_desc: dwrite_font,
+                    }
+                });
+            }
+            styles
+        }
     }
 
     fn get_matching_font(&self,
@@ -186,8 +220,23 @@ pub struct FontDescriptionBackend {
 }
 
 impl GenericFontDescriptionBackend for FontDescriptionBackend {
+    fn get_family_name(&self) -> String {
+        unsafe {
+            let family = self.font_desc.GetFontFamily().expect("GetFontFamily() failed");
+            let names = DWriteLocalizedStringsUtil(family.GetFamilyNames()
+                .expect("GetFamilyNames() failed"));
+            let index = names.find_locale("en-us").unwrap_or(0);
+            names.get_string(index)
+        }
+    }
+
     fn get_style_name(&self) -> String {
-        todo!()
+        unsafe {
+            let names = DWriteLocalizedStringsUtil(self.font_desc.GetFaceNames()
+                .expect("GetFaceNames() failed"));
+            let index = names.find_locale("en-us").unwrap_or(0);
+            names.get_string(index)
+        }
     }
 
     fn weight(&self) -> OpenTypeFontWeight {
