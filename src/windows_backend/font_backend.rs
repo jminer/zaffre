@@ -13,7 +13,7 @@ use windows::Win32::Graphics::DirectWrite::{
 };
 
 use crate::ffi_string::WideFfiString;
-use crate::font::{FontFamily, OpenTypeFontWeight, FontSlant, OpenTypeFontStretch, Font, FontDescription};
+use crate::font::{FontFamily, OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, Font, FontDescription};
 use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend, GenericFontBackend};
 
 // There is a one-to-one correspondence between an IDWriteFont and IDWriteFontFace.
@@ -176,11 +176,11 @@ impl GenericFontFamilyBackend for FontFamilyBackend {
     fn get_matching_font(&self,
         weight: OpenTypeFontWeight,
         style: FontSlant,
-        stretch: OpenTypeFontStretch,
+        width: OpenTypeFontWidth,
     ) -> Font {
         let dwrite_style = to_dwrite_style(style);
         unsafe {
-            let dwrite_font = self.family.GetFirstMatchingFont(weight.0 as i32, stretch.0 as i32, dwrite_style)
+            let dwrite_font = self.family.GetFirstMatchingFont(weight.0 as i32, width.0 as i32, dwrite_style)
                 .expect("GetFirstMatchingFont() failed");
             let font_face = dwrite_font.CreateFontFace().expect("CreateFontFace() failed");
             Font {
@@ -251,9 +251,9 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
         }
     }
 
-    fn stretch(&self) -> OpenTypeFontStretch {
+    fn width(&self) -> OpenTypeFontWidth {
         unsafe {
-            OpenTypeFontStretch(self.font_desc.GetStretch() as u32)
+            OpenTypeFontWidth(self.font_desc.GetStretch() as u32)
         }
     }
 

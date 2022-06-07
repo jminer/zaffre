@@ -66,7 +66,7 @@ pub enum FontSlant {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FontStretch {
+pub enum FontWidth {
     UltraCondensed = 1,
     ExtraCondensed = 2,
     Condensed = 3,
@@ -79,11 +79,11 @@ pub enum FontStretch {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OpenTypeFontStretch(pub u32);
+pub struct OpenTypeFontWidth(pub u32);
 
-impl From<FontStretch> for OpenTypeFontStretch {
-    fn from(stretch: FontStretch) -> Self {
-        Self(stretch as u32)
+impl From<FontWidth> for OpenTypeFontWidth {
+    fn from(width: FontWidth) -> Self {
+        Self(width as u32)
     }
 }
 
@@ -120,9 +120,9 @@ pub fn get_matching_font(
     family: &str,
     weight: OpenTypeFontWeight,
     slant: FontSlant,
-    stretch: OpenTypeFontStretch,
+    width: OpenTypeFontWidth,
 ) -> Option<Font> {
-    get_family(family).map(|f| f.get_matching_font(weight, slant, stretch))
+    get_family(family).map(|f| f.get_matching_font(weight, slant, width))
 }
 
 pub struct FontFamily<B: GenericFontFamilyBackend = FontFamilyBackend> {
@@ -141,7 +141,7 @@ impl<B: GenericFontFamilyBackend> FontFamily<B> {
     pub fn get_matching_font(&self,
         weight: OpenTypeFontWeight,
         slant: FontSlant,
-        stretch: OpenTypeFontStretch,
+        width: OpenTypeFontWidth,
     ) -> Font {
         todo!()
     }
@@ -171,8 +171,8 @@ impl<B: GenericFontDescriptionBackend> FontDescription<B> {
         self.backend.slant()
     }
 
-    pub fn stretch(&self) -> OpenTypeFontStretch {
-        self.backend.stretch()
+    pub fn width(&self) -> OpenTypeFontWidth {
+        self.backend.width()
     }
 
     pub fn is_monospaced(&self) -> bool {
