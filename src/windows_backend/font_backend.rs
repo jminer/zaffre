@@ -283,4 +283,15 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
         }
         false
     }
+
+    fn get_font(&self) -> Font {
+        unsafe {
+            let font_face = self.font_desc.CreateFontFace().expect("CreateFontFace() failed");
+            Font {
+                backend: FontBackend {
+                    font_face,
+                }
+            }
+        }
+    }
 }

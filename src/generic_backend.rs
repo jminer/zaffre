@@ -44,6 +44,8 @@ pub trait GenericFontDescriptionBackend: Debug + Clone {
     fn is_monospaced(&self) -> bool;
 
     fn has_color_glyphs(&self) -> bool;
+
+    fn get_font(&self) -> Font;
 }
 
 pub(crate) trait GenericGlyphImageSlabBackend: Debug + Clone {

@@ -182,6 +182,10 @@ impl<B: GenericFontDescriptionBackend> FontDescription<B> {
     pub fn has_color_glyphs(&self) -> bool {
         self.backend.has_color_glyphs()
     }
+
+    pub fn get_font(&self) -> Font {
+        self.backend.get_font()
+    }
 }
 
 
