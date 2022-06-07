@@ -26,10 +26,6 @@ pub trait GenericFontFamilyBackend: Debug + Clone {
     ) -> Font;
 }
 
-pub trait GenericFontBackend: Debug + Clone {
-    fn description(&self) -> FontDescription;
-}
-
 pub trait GenericFontDescriptionBackend: Debug + Clone {
     fn get_family_name(&self) -> String;
 
@@ -46,6 +42,10 @@ pub trait GenericFontDescriptionBackend: Debug + Clone {
     fn has_color_glyphs(&self) -> bool;
 
     fn get_font(&self) -> Font;
+}
+
+pub trait GenericFontBackend: Debug + Clone {
+    fn description(&self) -> FontDescription;
 }
 
 pub(crate) trait GenericGlyphImageSlabBackend: Debug + Clone {

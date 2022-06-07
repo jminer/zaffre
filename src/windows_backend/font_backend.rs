@@ -195,26 +195,6 @@ impl GenericFontFamilyBackend for FontFamilyBackend {
 }
 
 #[derive(Debug, Clone)]
-pub struct FontBackend {
-    font_face: IDWriteFontFace,
-}
-
-impl GenericFontBackend for FontBackend {
-    fn description(&self) -> FontDescription {
-        unsafe {
-            let collection = get_dwrite_system_collection();
-            let font_desc = collection.GetFontFromFontFace(&self.font_face)
-                .expect("GetFontFromFontFace() failed");
-            FontDescription {
-                backend: FontDescriptionBackend {
-                    font_desc
-                }
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct FontDescriptionBackend {
     font_desc: IDWriteFont,
 }
@@ -290,6 +270,26 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
             Font {
                 backend: FontBackend {
                     font_face,
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FontBackend {
+    font_face: IDWriteFontFace,
+}
+
+impl GenericFontBackend for FontBackend {
+    fn description(&self) -> FontDescription {
+        unsafe {
+            let collection = get_dwrite_system_collection();
+            let font_desc = collection.GetFontFromFontFace(&self.font_face)
+                .expect("GetFontFromFontFace() failed");
+            FontDescription {
+                backend: FontDescriptionBackend {
+                    font_desc
                 }
             }
         }

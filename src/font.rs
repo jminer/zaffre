@@ -95,18 +95,6 @@ impl From<FontWidth> for OpenTypeFontWidth {
 // IDWriteFont/CTFontDescriptor like object. Maybe a CTFontDescriptor, PangoFontDescription, and
 // QFont are all similar.
 
-#[derive(Debug, Clone)]
-pub struct Font<B: GenericFontBackend = FontBackend> {
-    pub(crate) backend: B,
-}
-
-impl Font {
-    pub fn description(&self) -> FontDescription {
-        self.backend.description()
-    }
-}
-
-
 
 pub fn get_families() -> Vec<FontFamily> {
     FontFunctionsBackend::get_families()
@@ -124,6 +112,7 @@ pub fn get_matching_font(
 ) -> Option<Font> {
     get_family(family).map(|f| f.get_matching_font(weight, slant, width))
 }
+
 
 pub struct FontFamily<B: GenericFontFamilyBackend = FontFamilyBackend> {
     pub(crate) backend: B,
@@ -188,6 +177,16 @@ impl<B: GenericFontDescriptionBackend> FontDescription<B> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Font<B: GenericFontBackend = FontBackend> {
+    pub(crate) backend: B,
+}
+
+impl Font {
+    pub fn description(&self) -> FontDescription {
+        self.backend.description()
+    }
+}
 
 
 // To render a font with a certain family, style, and size, the app should have to create a font
