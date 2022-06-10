@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use crate::font::{OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, FontFamily, Font, FontDescription};
 use crate::text_analyzer::TextAnalyzerRun;
 
-// font
+// region: font
 
 pub(crate) trait GenericFontFunctionsBackend {
     fn get_families() -> Vec<FontFamily> {
@@ -51,7 +51,9 @@ pub trait GenericFontBackend: Debug + Clone {
     fn description(&self) -> FontDescription;
 }
 
-// glyph_painter
+// endregion:
+
+// region: glyph_painter
 
 pub(crate) trait GenericGlyphImageSlabBackend: Debug + Clone {
     fn new(width: u32, height: u32) -> Self;
@@ -61,7 +63,9 @@ pub trait GenericGlyphPainterBackend: Debug + Clone {
     fn new() -> Self;
 }
 
-// text_analyzer
+// endregion:
+
+// region: text_analyzer
 
 pub trait GenericTextAnalyzerRunBackend: Debug + Clone {
 }
@@ -72,3 +76,5 @@ pub trait GenericTextAnalyzerBackend: Debug + Clone {
     fn get_runs(&self) -> Vec<TextAnalyzerRun>;
 
 }
+
+// endregion:
