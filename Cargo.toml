@@ -35,3 +35,7 @@ features = [
     "Win32_Graphics_Imaging",
     "Win32_System_Com",
 ]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-text = "19.2"
+core-foundation = "0.9.3"

@@ -20,6 +20,6 @@ fn compile_shader<P: AsRef<Path>>(path: P) {
 }
 
 fn main() {
-    fs::create_dir_all("target/shaders").expect("failed to create target/shaders");
-    compile_shader("src/shaders/fill.frag");
+    //fs::create_dir_all("target/shaders").expect("failed to create target/shaders");
+    //compile_shader("src/shaders/fill.frag");
 }

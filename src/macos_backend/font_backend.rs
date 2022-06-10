@@ -1,4 +1,12 @@
-use std::{ptr, ffi::c_void};
+use std::ptr;
+use std::ffi::c_void;
+
+use core_text::font_collection;
+use core_text::font_descriptor::CTFontDescriptor;
+
+use crate::generic_backend::GenericFontFunctionsBackend;
+use crate::generic_backend::GenericFontFamilyBackend;
+use crate::font::FontFamily;
 
 
 // CTFontCollectionCreateFromAvailableFonts
@@ -45,9 +53,9 @@ fn compare_font_descriptors_family_name(desc1: CTFontDescriptor, desc2: CTFontDe
 
 pub(crate) struct FontFunctionsBackend;
 impl GenericFontFunctionsBackend for FontFunctionsBackend {
-    fn get_families() -> Vec<crate::font::FontFamily> {
+    fn get_families() -> Vec<FontFamily> {
         unsafe {
-            let collection = CTFontCollectionCreateFromAvailableFonts(ptr::null_mut());
+            let collection = font_collection::create_for_all_families();
             let descriptor_array = CTFontCollectionCreateMatchingFontDescriptorsSortedWithCallback(collection);
             for i in 0..CFArrayGetCount(descriptor_array) {
                 let descriptor = CFArrayGetValueAtIndex(descriptor_array, i);
@@ -56,10 +64,10 @@ impl GenericFontFunctionsBackend for FontFunctionsBackend {
         }
     }
 
-    fn get_family(name: &str) -> Option<crate::font::FontFamily> {
+    fn get_family(name: &str) -> Option<FontFamily> {
         unsafe {
             Some(FontFamily {
-                backend: FontFamilyBackend { family }
+                backend: FontFamilyBackend { family, name: todo!(), descriptors: todo!() }
             })
         }
     }

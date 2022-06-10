@@ -1,5 +1,8 @@
 use std::ops::Range;
 
+use crate::generic_backend::GenericTextAnalyzerRunBackend;
+use crate::backend::text_analyzer_backend::TextAnalyzerRunBackend;
+
 
 #[derive(Debug, Clone, Copy)]
 pub enum TextDirection {
@@ -8,9 +11,10 @@ pub enum TextDirection {
 }
 
 #[derive(Debug)]
-pub struct TextAnalyzerRun {
+pub struct TextAnalyzerRun<B: GenericTextAnalyzerRunBackend = TextAnalyzerRunBackend> {
     text_range: Range<usize>,
     direction: TextDirection,
+    backend: B,
 }
 
 impl TextAnalyzerRun {
@@ -23,6 +27,7 @@ impl TextAnalyzerRun {
     }
 }
 
+// Reusing TextAnalyzer objects improves performance because it can reuse allocations.
 pub struct TextAnalyzer {
     text: String,
 }

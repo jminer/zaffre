@@ -14,7 +14,12 @@ extern crate num;
 extern crate once_cell;
 extern crate tiny_skia;
 extern crate smallvec;
+
+#[cfg(windows)]
 extern crate windows;
+
+#[cfg(target_os = "macos")]
+extern crate core_text;
 
 mod color;
 mod coordinates;
@@ -38,7 +43,7 @@ mod generic_backend;
 #[cfg(windows)]
 #[path = "windows_backend/mod.rs"]
 pub mod backend;
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 #[path = "gtk_backend/mod.rs"]
 pub mod backend;
 #[cfg(target_os = "macos")]
