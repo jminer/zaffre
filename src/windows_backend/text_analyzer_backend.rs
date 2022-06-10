@@ -1,7 +1,9 @@
-use crate::generic_backend::GenericTextAnalyzerBackend;
+use crate::generic_backend::{GenericTextAnalyzerBackend, GenericTextAnalyzerRunBackend};
+use crate::text_analyzer::TextAnalyzerRun;
 
 
 
+#[derive(Debug, Clone, Copy)]
 pub struct TextAnalyzerRunBackend {
 
 }
@@ -9,6 +11,7 @@ pub struct TextAnalyzerRunBackend {
 impl GenericTextAnalyzerRunBackend for TextAnalyzerRunBackend {
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct TextAnalyzerBackend {
 
 }
@@ -19,7 +22,6 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
     }
 
     fn get_runs(&self) -> Vec<TextAnalyzerRun> {
-        //CTLineGe
         todo!()
     }
 }

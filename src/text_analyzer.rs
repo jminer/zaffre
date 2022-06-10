@@ -1,7 +1,7 @@
 use std::ops::Range;
 
-use crate::generic_backend::GenericTextAnalyzerRunBackend;
-use crate::backend::text_analyzer_backend::TextAnalyzerRunBackend;
+use crate::generic_backend::{GenericTextAnalyzerRunBackend, GenericTextAnalyzerBackend};
+use crate::backend::text_analyzer_backend::{TextAnalyzerRunBackend, TextAnalyzerBackend};
 
 
 #[derive(Debug, Clone, Copy)]
@@ -28,8 +28,9 @@ impl TextAnalyzerRun {
 }
 
 // Reusing TextAnalyzer objects improves performance because it can reuse allocations.
-pub struct TextAnalyzer {
+pub struct TextAnalyzer<B: GenericTextAnalyzerBackend = TextAnalyzerBackend> {
     text: String,
+    backend: B,
 }
 
 impl TextAnalyzer {
@@ -44,8 +45,7 @@ impl TextAnalyzer {
     }
 
     pub fn get_runs(&self) -> Vec<TextAnalyzerRun> {
-
-        todo!()
+        self.backend.get_runs()
     }
 
     pub fn get_glyphs_and_positions(&self, text_range: Range<usize>, run: TextAnalyzerRun) {
