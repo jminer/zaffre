@@ -1,15 +1,15 @@
 use std::ffi::{OsStr, OsString};
-use std::mem;
+use std::{mem, iter};
 use std::os::windows::prelude::OsStringExt;
 use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
 use smallvec::SmallVec;
-use windows::Win32::Foundation::{PWSTR, BOOL};
+use windows::Win32::Foundation::BOOL;
 use windows::Win32::Graphics::Gdi::{LOGFONTW, FIXED_PITCH};
 use windows::core::Interface;
 use windows::Win32::Graphics::DirectWrite::{
-    DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection, DWRITE_FACTORY_TYPE_SHARED, IDWriteFontFamily, IDWriteFont, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STYLE_OBLIQUE, IDWriteFontFace, IDWriteFont1, IDWriteFont2, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_NORMAL, IDWriteLocalizedStrings,
+    DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection, DWRITE_FACTORY_TYPE_SHARED, IDWriteFontFamily, IDWriteFont, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STYLE_OBLIQUE, IDWriteFontFace, IDWriteFont1, IDWriteFont2, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_NORMAL, IDWriteLocalizedStrings, DWRITE_FONT_STYLE, DWRITE_FONT_WEIGHT, DWRITE_FONT_STRETCH,
 };
 
 use crate::ffi_string::WideFfiString;
@@ -45,7 +45,7 @@ fn get_dwrite_system_collection() -> IDWriteFontCollection {
     }
 }
 
-fn to_dwrite_style(style: FontSlant) -> i32 {
+fn to_dwrite_style(style: FontSlant) -> DWRITE_FONT_STYLE {
     match style {
         FontSlant::Normal => DWRITE_FONT_STYLE_NORMAL,
         FontSlant::Italic => DWRITE_FONT_STYLE_ITALIC,
@@ -53,7 +53,7 @@ fn to_dwrite_style(style: FontSlant) -> i32 {
     }
 }
 
-fn from_dwrite_style(style: i32) -> FontSlant {
+fn from_dwrite_style(style: DWRITE_FONT_STYLE) -> FontSlant {
     match style {
         DWRITE_FONT_STYLE_NORMAL => FontSlant::Normal,
         DWRITE_FONT_STYLE_ITALIC => FontSlant::Italic,
@@ -84,10 +84,11 @@ impl DWriteLocalizedStringsUtil {
         unsafe {
             let name_len = self.0.GetStringLength(index)
                 .expect("GetStringLength() failed") as usize;
-            let mut name_buf = SmallVec::<[u16; 32]>::new();
-            name_buf.reserve_exact(name_len + 1); // +1 for null term
-            self.0.GetString(index, PWSTR(name_buf.as_mut_ptr()), name_buf.capacity() as u32)
-                .expect("GetString() failed");
+            // +1 for null term
+            let mut name_buf = SmallVec::<[u16; 32]>::from_elem(0, name_len + 1);
+            // I don't really like that the windows crate now takes a reference, not to
+            // MaybeUnit<u16>, so now it requires that the memory is initialized.
+            self.0.GetString(index, &mut name_buf).expect("GetString() failed");
             name_buf.set_len(name_len);
             OsString::from_wide(&name_buf).to_string_lossy().into_owned()
         }
@@ -180,8 +181,11 @@ impl GenericFontFamilyBackend for FontFamilyBackend {
     ) -> Font {
         let dwrite_style = to_dwrite_style(style);
         unsafe {
-            let dwrite_font = self.family.GetFirstMatchingFont(weight.0 as i32, width.0 as i32, dwrite_style)
-                .expect("GetFirstMatchingFont() failed");
+            let dwrite_font = self.family.GetFirstMatchingFont(
+                    DWRITE_FONT_WEIGHT(weight.0 as i32),
+                    DWRITE_FONT_STRETCH(width.0 as i32),
+                    dwrite_style
+                ).expect("GetFirstMatchingFont() failed");
             let font_face = dwrite_font.CreateFontFace().expect("CreateFontFace() failed");
             Font {
                 backend: FontBackend {
@@ -221,7 +225,7 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
 
     fn weight(&self) -> OpenTypeFontWeight {
         unsafe {
-            OpenTypeFontWeight(self.font_desc.GetWeight() as u32)
+            OpenTypeFontWeight(self.font_desc.GetWeight().0 as u32)
         }
     }
 
@@ -233,7 +237,7 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
 
     fn width(&self) -> OpenTypeFontWidth {
         unsafe {
-            OpenTypeFontWidth(self.font_desc.GetStretch() as u32)
+            OpenTypeFontWidth(self.font_desc.GetStretch().0 as u32)
         }
     }
 
