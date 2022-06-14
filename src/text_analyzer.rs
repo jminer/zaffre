@@ -10,11 +10,11 @@ pub enum TextDirection {
     RightToLeft,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TextAnalyzerRun<B: GenericTextAnalyzerRunBackend = TextAnalyzerRunBackend> {
-    text_range: Range<usize>,
-    direction: TextDirection,
-    backend: B,
+    pub(crate) text_range: Range<usize>,
+    pub(crate) direction: TextDirection,
+    pub(crate) backend: B,
 }
 
 impl TextAnalyzerRun {
