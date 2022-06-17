@@ -1,9 +1,12 @@
+use std::collections::HashMap;
 use std::ptr;
 use std::ffi::c_void;
 
+use core_text::font::CTFont;
 use core_text::font_collection;
 use core_text::font_descriptor::CTFontDescriptor;
 
+use crate::font;
 use crate::generic_backend::GenericFontFunctionsBackend;
 use crate::generic_backend::GenericFontFamilyBackend;
 use crate::font::FontFamily;
@@ -44,23 +47,40 @@ use crate::font::FontFamily;
 // normalized infers that the input values were matched up with actual existing fonts, and the
 // descriptors for those existing fonts are the returned normalized descriptors."
 
-fn compare_font_descriptors_family_name(desc1: CTFontDescriptor, desc2: CTFontDescriptor, data: *const c_void) {
-    let family1 = CTFontDescriptorCopyAttribute(desc1, kCTFontFamilyNameAttribute);
-    let family2 = CTFontDescriptorCopyAttribute(desc1, kCTFontFamilyNameAttribute);
-    let result = todo!();
-    result
-}
+// fn compare_font_descriptors_family_name(desc1: CTFontDescriptor, desc2: CTFontDescriptor, data: *const c_void) {
+//     let family1 = CTFontDescriptorCopyAttribute(desc1, kCTFontFamilyNameAttribute);
+//     let family2 = CTFontDescriptorCopyAttribute(desc1, kCTFontFamilyNameAttribute);
+//     let result = todo!();
+//     result
+// }
 
 pub(crate) struct FontFunctionsBackend;
 impl GenericFontFunctionsBackend for FontFunctionsBackend {
     fn get_families() -> Vec<FontFamily> {
         unsafe {
+            let mut families_hash: HashMap<String, Vec<CTFontDescriptor>> = HashMap::with_capacity(40);
             let collection = font_collection::create_for_all_families();
-            let descriptor_array = CTFontCollectionCreateMatchingFontDescriptorsSortedWithCallback(collection);
-            for i in 0..CFArrayGetCount(descriptor_array) {
-                let descriptor = CFArrayGetValueAtIndex(descriptor_array, i);
+            let descriptor_array = collection.get_descriptors();// CTFontCollectionCreateMatchingFontDescriptorsSortedWithCallback(collection);
+            if let Some(descriptor_array) = descriptor_array {
+                for i in 0..descriptor_array.len() {
+                    let descriptor = descriptor_array.get(i);
+                    if let Some(descriptor) = descriptor {
+                        let family = descriptor.family_name();
+                        let family_descriptors = families_hash.entry(&family).or_insert_with(Vec::new());
+                        family_descriptors.push(descriptor);
+                    }
+                }
             }
-            // TODO: how is memory management done? I probably need to call CFRelease()?
+            let font_families: Vec<_> = families_hash.into_iter().map(|(family_name, descriptors)| {
+                FontFamily {
+                    backend: FontFamilyBackend {
+                        name: family_name,
+                        descriptors,
+                    },
+                }
+            }).collect();
+            font_families
+            // TODO: I think the Rust libs handle memory management, but I need to make sure there is an autorelease pool
         }
     }
 
