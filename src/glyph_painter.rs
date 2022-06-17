@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::backend::glyph_painter::{GlyphImageSlabBackend, GlyphPainterBackend};
+use crate::backend::glyph_painter_backend::{GlyphImageSlabBackend, GlyphPainterBackend};
 use crate::generic_backend::{GenericGlyphImageSlabBackend, GenericGlyphPainterBackend};
 
 const SLAB_HEIGHT_FACTOR: u32 = 16;
