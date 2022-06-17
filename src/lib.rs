@@ -19,6 +19,8 @@ extern crate smallvec;
 extern crate windows;
 
 #[cfg(target_os = "macos")]
+extern crate core_foundation;
+#[cfg(target_os = "macos")]
 extern crate core_text;
 
 mod color;
