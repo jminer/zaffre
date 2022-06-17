@@ -1,13 +1,15 @@
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
+use std::fmt::Debug;
 #[cfg(windows)]
-use std::os::windows::prelude::OsStrExt;
+use std::os::windows::prelude::{OsStrExt, OsStringExt};
 
 use smallvec::SmallVec;
 #[cfg(windows)]
 use windows::core::{IntoParam, Abi, Param, PWSTR, PCWSTR};
 
-pub(crate) struct WideFfiString<A: ::smallvec::Array> {
+#[derive(Clone)]
+pub(crate) struct WideFfiString<A: ::smallvec::Array<Item=u16>> {
     buffer: SmallVec<A>,
 }
 
@@ -17,6 +19,14 @@ impl<A: ::smallvec::Array<Item=u16>> WideFfiString<A> {
         buffer.extend(OsStr::new(s).encode_wide().map(|c| if c == 0 { b'?' as u16 } else { c }));
         buffer.push(0);
         Self { buffer }
+    }
+}
+
+impl<A: ::smallvec::Array<Item=u16>> Debug for WideFfiString<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WideFfiString")
+            .field("buffer", &OsString::from_wide(&self.buffer))
+            .finish()
     }
 }
 
