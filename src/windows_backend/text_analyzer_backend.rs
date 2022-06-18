@@ -329,17 +329,37 @@ impl IDWriteTextAnalysisSink_Impl for DWriteLineBreakAnalysisSink {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone)]
 pub struct TextAnalyzerBackend {
+    text: String,
+    wide_text: WideFfiString<[u16; 8]>,
+}
 
+impl Debug for TextAnalyzerBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TextAnalyzerBackend")
+            .field("text", &self.text)
+            .finish()
+    }
 }
 
 impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
     fn new(text: String) -> Self {
-        todo!()
+        let wide_text = WideFfiString::new(&text);
+        let run_analysis_sink = DWriteRunAnalysisSink::new();
+        Self {
+            text,
+            wide_text,
+        }
+    }
+
+    fn text(&self) -> &str {
+        &self.text
     }
 
     fn get_runs(&self) -> Vec<TextAnalyzerRun> {
+        // TODO: call analyzer with the sink
+        // TODO: loop through run indexes and convert from UTF-16 to UTF-8
         todo!()
     }
 }

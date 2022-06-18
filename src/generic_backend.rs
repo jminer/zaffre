@@ -2,7 +2,7 @@
 use std::fmt::Debug;
 
 use crate::font::{OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, FontFamily, Font, FontDescription};
-use crate::text_analyzer::TextAnalyzerRun;
+use crate::text_analyzer::{TextAnalyzerRun, TextAnalyzer};
 
 // region: font
 
@@ -72,6 +72,8 @@ pub trait GenericTextAnalyzerRunBackend: Debug + Clone {
 
 pub trait GenericTextAnalyzerBackend: Debug + Clone {
     fn new(text: String) -> Self;
+
+    fn text(&self) -> &str;
 
     fn get_runs(&self) -> Vec<TextAnalyzerRun>;
 

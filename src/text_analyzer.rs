@@ -29,11 +29,10 @@ impl TextAnalyzerRun {
 
 // Reusing TextAnalyzer objects improves performance because it can reuse allocations.
 pub struct TextAnalyzer<B: GenericTextAnalyzerBackend = TextAnalyzerBackend> {
-    text: String,
     backend: B,
 }
 
-impl TextAnalyzer {
+impl<B: GenericTextAnalyzerBackend> TextAnalyzer<B> {
 
     // provide line breaks, hyphenation breaks, caret stops, and word stops cross-platform,
     // as well as shaping and glyph placement?
@@ -41,7 +40,13 @@ impl TextAnalyzer {
     // have all fn take &self, not &mut self
 
     pub fn new(text: String) -> Self {
-        todo!()
+        Self {
+            backend: B::new(text)
+        }
+    }
+
+    pub fn text(&self) -> &str {
+        self.backend.text()
     }
 
     pub fn get_runs(&self) -> Vec<TextAnalyzerRun> {
