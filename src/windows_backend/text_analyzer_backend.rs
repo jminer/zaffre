@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::fmt::Debug;
 use std::ops::Range;
 use std::{iter, ptr};
 
@@ -7,6 +8,8 @@ use windows::core::implement;
 
 use crate::generic_backend::{GenericTextAnalyzerBackend, GenericTextAnalyzerRunBackend};
 use crate::text_analyzer::{TextAnalyzerRun, TextDirection};
+
+use super::wide_ffi_string::WideFfiString;
 
 
 #[derive(Debug, Clone, Copy)]

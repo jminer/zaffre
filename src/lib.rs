@@ -51,7 +51,6 @@ pub mod backend;
 #[cfg(target_os = "macos")]
 #[path = "macos_backend/mod.rs"]
 pub mod backend;
-mod ffi_string;
 
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;

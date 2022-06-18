@@ -12,9 +12,10 @@ use windows::Win32::Graphics::DirectWrite::{
     DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection, DWRITE_FACTORY_TYPE_SHARED, IDWriteFontFamily, IDWriteFont, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STYLE_OBLIQUE, IDWriteFontFace, IDWriteFont1, IDWriteFont2, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_NORMAL, IDWriteLocalizedStrings, DWRITE_FONT_STYLE, DWRITE_FONT_WEIGHT, DWRITE_FONT_STRETCH,
 };
 
-use crate::ffi_string::WideFfiString;
 use crate::font::{FontFamily, OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, Font, FontDescription};
 use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend, GenericFontBackend};
+
+use super::wide_ffi_string::WideFfiString;
 
 // There is a one-to-one correspondence between an IDWriteFont and IDWriteFontFace.
 // - IDWriteFont -> IDWriteFontFace using IDWriteFont::CreateFontFace()
