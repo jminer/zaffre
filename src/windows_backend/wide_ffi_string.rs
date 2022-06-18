@@ -5,6 +5,11 @@ use std::os::windows::prelude::{OsStrExt, OsStringExt};
 use smallvec::SmallVec;
 use windows::core::{IntoParam, Abi, Param, PWSTR, PCWSTR};
 
+// This type is only in the Windows backend for a couple reasons:
+// - Even though macOS uses UTF-16 like Windows does, it has a CFString create function that takes a
+//   UTF-8 string. So I don't think it is needed on macOS.
+// - The standard library's OsStr::encode_wide() function is only available on Windows.
+
 #[derive(Clone)]
 pub(crate) struct WideFfiString<A: ::smallvec::Array<Item=u16>> {
     buffer: SmallVec<A>,
