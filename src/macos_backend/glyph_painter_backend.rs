@@ -1,5 +1,3 @@
-use std::ptr;
-
 use crate::generic_backend::{GenericGlyphImageSlabBackend, GenericGlyphPainterBackend};
 
 

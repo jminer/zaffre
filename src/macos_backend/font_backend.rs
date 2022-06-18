@@ -1,24 +1,22 @@
 use std::collections::HashMap;
-use std::ptr;
-use std::ffi::c_void;
 
 use core_foundation::array::CFArray;
 use core_foundation::dictionary::CFDictionary;
-use core_foundation::dictionary::CFDictionaryCreate;
-use core_foundation::dictionary::CFMutableDictionary;
 use core_foundation::set::CFSet;
 use core_foundation::string::CFString;
-use core_text::font::CTFont;
 use core_text::font_collection;
 use core_text::font_descriptor;
 use core_text::font_descriptor::CTFontDescriptor;
 use core_text::font_descriptor::CTFontDescriptorCreateMatchingFontDescriptors;
 use core_text::font_descriptor::kCTFontFamilyNameAttribute;
 
-use crate::font;
+use crate::font::Font;
+use crate::font::FontDescription;
 use crate::font::FontSlant;
 use crate::font::OpenTypeFontWeight;
 use crate::font::OpenTypeFontWidth;
+use crate::generic_backend::GenericFontBackend;
+use crate::generic_backend::GenericFontDescriptionBackend;
 use crate::generic_backend::GenericFontFunctionsBackend;
 use crate::generic_backend::GenericFontFamilyBackend;
 use crate::font::FontFamily;
@@ -150,13 +148,13 @@ pub struct FontDescriptionBackend {
 impl GenericFontDescriptionBackend for FontDescriptionBackend {
     fn get_family_name(&self) -> String {
         unsafe {
-            todo!()
+            self.font_desc.family_name()
         }
     }
 
     fn get_style_name(&self) -> String {
         unsafe {
-            todo!()
+            self.font_desc.style_name()
         }
     }
 
@@ -190,5 +188,15 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
         unsafe {
             todo!()
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FontBackend {
+}
+
+impl GenericFontBackend for FontBackend {
+    fn description(&self) -> FontDescription {
+        todo!()
     }
 }
