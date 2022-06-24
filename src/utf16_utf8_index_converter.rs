@@ -67,8 +67,14 @@ impl<'a, 'b> Utf16Utf8IndexConverter<'a, 'b> {
 
 #[test]
 fn utf16_utf8_conversion_test() {
+    // https://convertcodes.com/utf16-encode-decode-convert-string/
+
     // ללשון
-    let (u16_str, u8_str) = ([0x61u16, 0x6E, 0x20, 0x5DC, 0x5DC, 0x5e9, 0x5D5, 0x5DF, 0x21], "an ללשון!");
+    // utf8: \x61\x6e\x20\xd7\x9c\xd7\x9c\xd7\xa9\xd7\x95\xd7\x9f\x21
+    let (u16_str, u8_str) = (
+        [0x61u16, 0x6E, 0x20, 0x5DC, 0x5DC, 0x5e9, 0x5D5, 0x5DF, 0x21],
+        "an ללשון!"
+    );
     let mut converter = Utf16Utf8IndexConverter::new(&u16_str, u8_str);
     assert_eq!(converter.convert(0), 0);
     assert_eq!(converter.convert(1), 1);
@@ -78,5 +84,19 @@ fn utf16_utf8_conversion_test() {
     assert_eq!(converter.convert(5), 7);
     assert_eq!(converter.convert(7), 11);
     assert_eq!(converter.convert(8), 13);
+
+    // utf8: \x68\x69\xf0\x9f\x99\x83\xf0\x9f\x92\x99\xf0\x9f\x92\x9a
+    let (u16_str, u8_str) = (
+        [0x0068, 0x0069, 0xd83d, 0xde43, 0xd83d, 0xdc99, 0xd83d, 0xdc9a],
+        "hi🙃💙💚"
+    );
+    let converter = Utf16Utf8IndexConverter::new(&u16_str, u8_str);
+    assert_eq!(converter.collect::<Vec<_>>(), &[
+        (0, 0), (1, 1), (2, 2), (4, 6), (6, 10), (8, 14)
+    ]);
+    let mut converter = Utf16Utf8IndexConverter::new(&u16_str, u8_str);
+    assert_eq!(converter.convert(2), 2);
+    assert_eq!(converter.convert(4), 6);
+    assert_eq!(converter.convert(8), 14);
 }
 
