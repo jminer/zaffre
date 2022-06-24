@@ -44,7 +44,7 @@ impl<'a, 'b> Iterator for Utf16Utf8IndexConverter<'a, 'b> {
 }
 
 impl<'a, 'b> Utf16Utf8IndexConverter<'a, 'b> {
-    fn new(utf16: &[u16], utf8: &str) -> Self {
+    fn new(utf16: &'a [u16], utf8: &'b str) -> Self {
         Self {
             utf16_str: utf16,
             utf8_str: utf8,
@@ -69,14 +69,14 @@ impl<'a, 'b> Utf16Utf8IndexConverter<'a, 'b> {
 fn utf16_utf8_conversion_test() {
     // ללשון
     let (u16_str, u8_str) = ([0x61u16, 0x6E, 0x20, 0x5DC, 0x5DC, 0x5e9, 0x5D5, 0x5DF, 0x21], "an ללשון!");
-    let converter = Utf16Utf8IndexConverter::new(&u16_str, u8_str);
-    assert!(converter.convert(0) == 0);
-    assert!(converter.convert(1) == 1);
-    assert!(converter.convert(2) == 2);
-    assert!(converter.convert(3) == 3);
-    assert!(converter.convert(4) == 5);
-    assert!(converter.convert(5) == 7);
-    assert!(converter.convert(7) == 11);
-    assert!(converter.convert(8) == 12);
+    let mut converter = Utf16Utf8IndexConverter::new(&u16_str, u8_str);
+    assert_eq!(converter.convert(0), 0);
+    assert_eq!(converter.convert(1), 1);
+    assert_eq!(converter.convert(2), 2);
+    assert_eq!(converter.convert(3), 3);
+    assert_eq!(converter.convert(4), 5);
+    assert_eq!(converter.convert(5), 7);
+    assert_eq!(converter.convert(7), 11);
+    assert_eq!(converter.convert(8), 13);
 }
 
