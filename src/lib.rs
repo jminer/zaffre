@@ -1,6 +1,7 @@
 #![feature(backtrace)]
 #![feature(bench_black_box)]
 #![feature(int_log)]
+#![feature(utf16_extra)]
 #![deny(unreachable_pub)]
 #![feature(test)]
 extern crate test;
@@ -39,6 +40,7 @@ mod formatted_string;
 mod text_analyzer;
 mod text_layout;
 mod glyph_painter;
+mod utf16_utf8_index_converter;
 
 mod generic_backend;
 
