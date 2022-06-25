@@ -32,7 +32,7 @@ pub struct TextAnalyzer<B: GenericTextAnalyzerBackend = TextAnalyzerBackend> {
     backend: B,
 }
 
-impl<B: GenericTextAnalyzerBackend> TextAnalyzer<B> {
+impl TextAnalyzer {
 
     // provide line breaks, hyphenation breaks, caret stops, and word stops cross-platform,
     // as well as shaping and glyph placement?
@@ -41,7 +41,7 @@ impl<B: GenericTextAnalyzerBackend> TextAnalyzer<B> {
 
     pub fn new(text: String) -> Self {
         Self {
-            backend: B::new(text)
+            backend: TextAnalyzerBackend::new(text)
         }
     }
 
