@@ -16,6 +16,16 @@ pub(crate) struct WideFfiString<A: ::smallvec::Array<Item=u16>> {
 }
 
 impl<A: ::smallvec::Array<Item=u16>> WideFfiString<A> {
+    pub(crate) fn len(&self) -> usize {
+        return self.buffer.len() - 1; // don't include null-terminator
+    }
+
+    pub(crate) fn as_ptr(&self) -> *const u16 {
+        self.buffer.as_ptr()
+    }
+}
+
+impl<A: ::smallvec::Array<Item=u16>> WideFfiString<A> {
     pub(crate) fn new(s: &str) -> Self {
         let mut buffer = SmallVec::<A>::new();
         buffer.extend(OsStr::new(s).encode_wide().map(|c| if c == 0 { b'?' as u16 } else { c }));

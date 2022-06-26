@@ -70,7 +70,7 @@ pub trait GenericGlyphPainterBackend: Debug + Clone {
 pub trait GenericTextAnalyzerRunBackend: Debug + Clone {
 }
 
-pub trait GenericTextAnalyzerBackend: Debug + Clone {
+pub trait GenericTextAnalyzerBackend: Debug {
     fn new(text: String) -> Self;
 
     fn text(&self) -> &str;
