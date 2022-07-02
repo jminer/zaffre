@@ -20,6 +20,10 @@ impl<A: ::smallvec::Array<Item=u16>> WideFfiString<A> {
         return self.buffer.len() - 1; // don't include null-terminator
     }
 
+    pub(crate) fn as_slice(&self) -> &[u16] {
+        &self.buffer[0..self.buffer.len() - 1]
+    }
+
     pub(crate) fn as_ptr(&self) -> *const u16 {
         self.buffer.as_ptr()
     }

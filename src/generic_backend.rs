@@ -1,5 +1,6 @@
 
 use std::fmt::Debug;
+use std::ops::Range;
 
 use crate::font::{OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, FontFamily, Font, FontDescription};
 use crate::text_analyzer::{TextAnalyzerRun, TextAnalyzer};
@@ -76,6 +77,14 @@ pub trait GenericTextAnalyzerBackend: Debug {
     fn text(&self) -> &str;
 
     fn get_runs(&self) -> Vec<TextAnalyzerRun>;
+
+    fn get_glyphs_and_positions(
+        &self,
+        text_range: Range<usize>,
+        run: TextAnalyzerRun,
+        font: &Font,
+        font_size: f32,
+    );
 
 }
 

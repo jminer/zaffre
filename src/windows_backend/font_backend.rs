@@ -283,7 +283,7 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
 
 #[derive(Debug, Clone)]
 pub struct FontBackend {
-    font_face: IDWriteFontFace,
+    pub(crate) font_face: IDWriteFontFace,
 }
 
 impl GenericFontBackend for FontBackend {

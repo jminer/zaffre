@@ -1,5 +1,6 @@
 use std::ops::Range;
 
+use crate::font::Font;
 use crate::generic_backend::{GenericTextAnalyzerRunBackend, GenericTextAnalyzerBackend};
 use crate::backend::text_analyzer_backend::{TextAnalyzerRunBackend, TextAnalyzerBackend};
 
@@ -27,7 +28,10 @@ impl TextAnalyzerRun {
     }
 }
 
-// Reusing TextAnalyzer objects improves performance because it can reuse allocations.
+/// There is currently no support for custom mapping from Unicode characters to glyphs. Also, there
+/// is no support for typographic features, but support will probably be added in the future.
+///
+/// Reusing TextAnalyzer objects improves performance because it can reuse allocations.
 pub struct TextAnalyzer<B: GenericTextAnalyzerBackend = TextAnalyzerBackend> {
     backend: B,
 }
@@ -53,7 +57,15 @@ impl TextAnalyzer {
         self.backend.get_runs()
     }
 
-    pub fn get_glyphs_and_positions(&self, text_range: Range<usize>, run: TextAnalyzerRun) {
-
+    pub fn get_glyphs_and_positions(
+        &self,
+        text_range: Range<usize>,
+        run: TextAnalyzerRun,
+        font: &Font,
+        font_size: f32,
+    ) {
+        debug_assert!(run.text_range().contains(&text_range.start));
+        debug_assert!(run.text_range().contains(&(text_range.end - 1)));
+        self.backend.get_glyphs_and_positions(text_range, run, font, font_size)
     }
 }

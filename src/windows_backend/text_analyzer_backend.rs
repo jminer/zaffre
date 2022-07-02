@@ -4,16 +4,31 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::{iter, ptr};
 
-use windows::Win32::Globalization::{GetUserDefaultLocaleName, GetThreadLocale, GetLocaleInfoEx, LOCALE_SNAME};
-use windows::Win32::Graphics::DirectWrite::{IDWriteTextAnalysisSink, IDWriteTextAnalysisSink_Impl, DWRITE_SCRIPT_ANALYSIS, DWRITE_LINE_BREAKPOINT, IDWriteNumberSubstitution, IDWriteTextAnalysisSource, IDWriteTextAnalysisSource_Impl, DWRITE_READING_DIRECTION_LEFT_TO_RIGHT, DWRITE_NUMBER_SUBSTITUTION_METHOD_NONE};
+use num::Integer;
+use windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
+use windows::Win32::Globalization::{GetUserDefaultLocaleName, GetThreadLocale, GetLocaleInfoEx, LOCALE_SNAME, LCIDToLocaleName};
+use windows::Win32::Graphics::DirectWrite::{IDWriteTextAnalysisSink, IDWriteTextAnalysisSink_Impl, DWRITE_SCRIPT_ANALYSIS, DWRITE_LINE_BREAKPOINT, IDWriteNumberSubstitution, IDWriteTextAnalysisSource, IDWriteTextAnalysisSource_Impl, DWRITE_READING_DIRECTION_LEFT_TO_RIGHT, DWRITE_NUMBER_SUBSTITUTION_METHOD_NONE, IDWriteTextAnalyzer, DWRITE_SHAPING_TEXT_PROPERTIES, DWRITE_SHAPING_GLYPH_PROPERTIES, DWRITE_GLYPH_OFFSET};
 use windows::Win32::System::SystemServices::LOCALE_NAME_MAX_LENGTH;
 use windows::core::{implement, PCWSTR};
 
+use crate::font::Font;
 use crate::generic_backend::{GenericTextAnalyzerBackend, GenericTextAnalyzerRunBackend};
 use crate::text_analyzer::{TextAnalyzerRun, TextDirection};
+use crate::utf16_utf8_index_converter::Utf16Utf8IndexConverter;
 
 use super::font_backend::DWRITE_FACTORY;
 use super::wide_ffi_string::WideFfiString;
+
+fn get_thread_locale() -> [u16; LOCALE_NAME_MAX_LENGTH as usize] {
+    unsafe {
+        let mut locale_name = [0; LOCALE_NAME_MAX_LENGTH as usize];
+        // Windows docs say to prefer using the locale name, not id, but there doesn't seem to
+        // be a way to directly get the thread locale name, only id.
+        let locale_id = GetThreadLocale();
+        LCIDToLocaleName(locale_id, &mut locale_name[..], 0);
+        locale_name
+    }
+}
 
 // https://github.com/microsoft/DWriteShapePy/blob/main/src/cpp/TextAnalysis.cpp
 // https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/Win7Samples/multimedia/DirectWrite/CustomLayout
@@ -462,9 +477,17 @@ impl IDWriteTextAnalysisSink_Impl for DWriteLineBreakAnalysisSink {
 pub struct TextAnalyzerBackend {
     text: String,
     wide_text: WideFfiString<[u16; 8]>,
+    analyzer: IDWriteTextAnalyzer,
     //analysis_source: DWriteAnalysisSource,
     run_analysis_sink_data: Rc<DWriteRunAnalysisSinkData>,
     run_analysis_sink: IDWriteTextAnalysisSink,
+    last_index_pair: Cell<(u32, u32)>,
+
+    // I could store a Vec<(u32, u32)> mapping corresponding UTF-16 and UTF-8 indexes. It would use
+    // a lot of memory to store every pair of indexes, but storing every 8th one would be <= 1 byte
+    // per code unit, which is reasonable. I would probably choose one out of every 16. Then to
+    // convert an index, it would take a binary search, followed by a linear search of up to 16
+    // pairs.
 }
 
 impl Debug for TextAnalyzerBackend {
@@ -478,14 +501,21 @@ impl Debug for TextAnalyzerBackend {
 impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
     fn new(text: String) -> Self {
         let wide_text = WideFfiString::new(&text);
+        assert!(wide_text.len() <= u32::MAX as usize); // DirectWrite uses u32
+        assert!(text.len() <= u32::MAX as usize);
+        let analyzer = DWRITE_FACTORY.with(|factory|
+            unsafe { factory.CreateTextAnalyzer().expect("CreateTextAnalyzer() failed") }
+        );
         let run_analysis_sink_data = Rc::new(DWriteRunAnalysisSinkData::new());
         let run_analysis_sink: IDWriteTextAnalysisSink =
             DWriteRunAnalysisSink(run_analysis_sink_data.clone()).into();
         Self {
             text,
             wide_text,
+            analyzer,
             run_analysis_sink_data,
             run_analysis_sink,
+            last_index_pair: Cell::new((0, 0)),
         }
     }
 
@@ -498,17 +528,9 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
     fn get_runs(&self) -> Vec<TextAnalyzerRun> {
         unsafe {
             self.run_analysis_sink_data.clear_and_resize(self.wide_text.len());
-            let analyzer = DWRITE_FACTORY.with(|factory|
-                factory.CreateTextAnalyzer().expect("CreateTextAnalyzer() failed")
-            );
 
-            let mut locale_name = [0; LOCALE_NAME_MAX_LENGTH as usize];
             // Get the thread locale every time in case it changes.
-            let locale = GetThreadLocale();
-            GetLocaleInfoEx(
-                PCWSTR(ptr::null()), LOCALE_SNAME,
-                &mut locale_name[..]
-            );
+            let mut locale_name = get_thread_locale();
 
             let num_subst = DWRITE_FACTORY.with(|factory|
                 factory.CreateNumberSubstitution(DWRITE_NUMBER_SUBSTITUTION_METHOD_NONE,
@@ -526,17 +548,17 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
 
             let analysis_source: IDWriteTextAnalysisSource = analysis_source.into();
 
-            analyzer.AnalyzeScript(
+            self.analyzer.AnalyzeScript(
                 analysis_source.clone(),
                 0, self.wide_text.len() as u32,
                 self.run_analysis_sink.clone()
             ).expect("AnalyzeScript() failed");
-            analyzer.AnalyzeBidi(
+            self.analyzer.AnalyzeBidi(
                 analysis_source.clone(),
                 0, self.wide_text.len() as u32,
                 self.run_analysis_sink.clone()
             ).expect("AnalyzeBidi() failed");
-            analyzer.AnalyzeNumberSubstitution(
+            self.analyzer.AnalyzeNumberSubstitution(
                 analysis_source.clone(),
                 0, self.wide_text.len() as u32,
                 self.run_analysis_sink.clone()
@@ -550,4 +572,110 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
             runs
         }
     }
+
+    fn get_glyphs_and_positions(
+        &self,
+        text_range: Range<usize>,
+        run: TextAnalyzerRun,
+        font: &Font,
+        font_size: f32,
+    ) {
+        let mut last_index_pair = self.last_index_pair.get();
+        if text_range.start < last_index_pair.0 as usize {
+            self.last_index_pair.set((0, 0));
+        }
+        let mut converter = Utf16Utf8IndexConverter {
+            utf16_str: self.wide_text.as_slice(),
+            utf8_str: self.text(),
+            utf8_index: last_index_pair.0 as usize,
+            utf16_index: last_index_pair.1 as usize,
+        };
+        let wtext_start = converter.convert_to_utf16_index(text_range.start);
+        let wtext_end = converter.convert_to_utf16_index(text_range.end);
+        self.last_index_pair.set((converter.utf8_index as u32, converter.utf16_index as u32));
+
+        let mut locale_name = get_thread_locale();
+        let is_right_to_left = run.backend.bidi_levels
+            .expect("bidi level not set")
+            .resolved_level.is_odd();
+        let script_analysis = &run.backend.script_analysis
+            .expect("script analysis not set");
+
+        unsafe {
+            // TODO: I should move these 4 Vecs to the TextAnalyzerBackend struct
+            // and probably make them SmallVecs.
+            let mut cluster_map = Vec::<u16>::new();
+            let mut text_props = Vec::<DWRITE_SHAPING_TEXT_PROPERTIES>::new();
+            cluster_map.resize(wtext_end - wtext_start, 0);
+            text_props.resize(wtext_end - wtext_start, Default::default());
+
+            let mut glyph_buffer_capacity = 8;
+            let mut glyph_count: u32 = 0;
+            let mut glyphs = Vec::<u16>::new();
+            let mut glyph_props = Vec::<DWRITE_SHAPING_GLYPH_PROPERTIES>::new();
+            glyphs.resize(glyph_buffer_capacity, 0);
+            glyph_props.resize(glyph_buffer_capacity, Default::default()); // TODO: don't init?
+            loop {
+                let result = self.analyzer.GetGlyphs(
+                    PCWSTR(self.wide_text.as_ptr()),
+                    (wtext_end - wtext_start) as u32,
+                    &font.backend.font_face,
+                    false,
+                    is_right_to_left,
+                    script_analysis,
+                    PCWSTR(locale_name.as_ptr()),
+                    &run.backend.number_substitution,
+                    ptr::null(),
+                    ptr::null(),
+                    0,
+                    glyph_buffer_capacity as u32,
+                    cluster_map.as_mut_ptr(),
+                    text_props.as_mut_ptr(),
+                    glyphs.as_mut_ptr(),
+                    glyph_props.as_mut_ptr(),
+                    &mut glyph_count
+                );
+                if let Err(ref e) = result {
+                    if let Some(ERROR_INSUFFICIENT_BUFFER) = e.win32_error() {
+                        glyph_buffer_capacity = 3 * glyph_buffer_capacity / 2;
+                        glyphs.resize(glyph_buffer_capacity, 0);
+                        glyph_props.resize(glyph_buffer_capacity, Default::default());
+                        continue;
+                    } else {
+                        result.expect("GetGlyphs() failed");
+                    }
+                }
+                glyphs.resize(glyph_count as usize, 0);
+                glyph_props.resize(glyph_count as usize, Default::default());
+                break;
+            }
+
+            let mut glyph_advances = Vec::<f32>::new();
+            let mut glyph_offsets = Vec::<DWRITE_GLYPH_OFFSET>::new();
+            glyph_advances.resize(glyphs.len(), 0.0);
+            glyph_offsets.resize(glyphs.len(), Default::default());
+            self.analyzer.GetGlyphPlacements(
+                PCWSTR(self.wide_text.as_ptr()),
+                cluster_map.as_ptr(),
+                text_props.as_mut_ptr(),
+                (wtext_end - wtext_start) as u32,
+                glyphs.as_ptr(),
+                glyph_props.as_ptr(),
+                glyphs.len() as u32,
+                &font.backend.font_face,
+                font_size,
+                false,
+                is_right_to_left,
+                script_analysis,
+                PCWSTR(locale_name.as_ptr()),
+                ptr::null(),
+                ptr::null(),
+                0,
+                glyph_advances.as_mut_ptr(),
+                glyph_offsets.as_mut_ptr()
+            ).expect("GetGlyphPlacements() failed");
+        }
+    }
+
+
 }
