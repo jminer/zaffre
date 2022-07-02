@@ -134,3 +134,10 @@ https://stackoverflow.com/a/42179924/69671
 
 The bicubic result is not interpolated, as the original colors are lost. You get a different result if you scale up the image using bicubic interpolation in Gimp. Nicol Bolas's comment on that question is correct in that it is impossible to do bicubic interpolation with 4 bilinear samples. You have to actually read 16 texels and interpolate them in the shader.
 
+# font-kit
+
+I didn't know font-kit existed when I started on the font support. I mainly heard about pure Rust font libraries, but I think apps should use the native font libraries so they look more native. Looking at font-kit briefly, I see a few problems with it:
+
+- The backends aren't as abstracted away as I'd like. It would be easier if there is a cross-platform API where people don't have to know what backend is being used.
+- To open a font (like with DirectWrite), font-kit gets the path to the file from DirectWrite, reads in the file's data, then creates a DirectWrite font object using the in-memory font data. It also keeps a copy of the font data in a Rust `Vec`. I think this is needlessly inefficient. It completely bypasses whatever font caching DirectWrite does.
+- To rasterize a glyph, the API requires two copies of the image. In the DirectWrite backend, it allocates an alpha texture inside `rasterize_glyph`, then copies it to the `Canvas`. Then the image would have to be copied out of the `Canvas` to a font atlas or the display image. With DirectWrite's API, I think it's impossible to avoid one copy of the image data, but two is unnecessary.
