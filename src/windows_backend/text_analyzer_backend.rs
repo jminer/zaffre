@@ -14,7 +14,7 @@ use windows::core::{implement, PCWSTR};
 use crate::font::Font;
 use crate::generic_backend::{GenericTextAnalyzerBackend, GenericTextAnalyzerRunBackend};
 use crate::text_analyzer::{TextAnalyzerRun, TextDirection};
-use crate::utf16_utf8_index_converter::Utf16Utf8IndexConverter;
+use crate::utf_index_converter::UtfIndexConverter;
 
 use super::font_backend::DWRITE_FACTORY;
 use super::wide_ffi_string::WideFfiString;
@@ -584,9 +584,9 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
         if text_range.start < last_index_pair.0 as usize {
             self.last_index_pair.set((0, 0));
         }
-        let mut converter = Utf16Utf8IndexConverter {
-            utf16_str: self.wide_text.as_slice(),
+        let mut converter = UtfIndexConverter {
             utf8_str: self.text(),
+            utf16_str: self.wide_text.as_slice(),
             utf8_index: last_index_pair.0 as usize,
             utf16_index: last_index_pair.1 as usize,
         };

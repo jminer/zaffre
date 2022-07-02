@@ -11,18 +11,18 @@ fn utf8_code_point_byte_len(first_byte: u8) -> usize {
     }
 }
 
-pub(crate) struct Utf16Utf8IndexConverter<'a, 'b> {
-    pub(crate) utf16_str: &'a [u16],
+pub(crate) struct UtfIndexConverter<'a, 'b> {
     pub(crate) utf8_str: &'b str,
-    pub(crate) utf16_index: usize,
+    pub(crate) utf16_str: &'a [u16],
     pub(crate) utf8_index: usize,
+    pub(crate) utf16_index: usize,
 }
 
-impl<'a, 'b> Iterator for Utf16Utf8IndexConverter<'a, 'b> {
+impl<'a, 'b> Iterator for UtfIndexConverter<'a, 'b> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let indexes = (self.utf16_index, self.utf8_index);
+        let indexes = (self.utf8_index, self.utf16_index);
         if self.utf16_index >= self.utf16_str.len() {
             if self.utf16_index == self.utf16_str.len() {
                 self.utf16_index += 1;
@@ -43,19 +43,19 @@ impl<'a, 'b> Iterator for Utf16Utf8IndexConverter<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Utf16Utf8IndexConverter<'a, 'b> {
-    fn new(utf16: &'a [u16], utf8: &'b str) -> Self {
+impl<'a, 'b> UtfIndexConverter<'a, 'b> {
+    fn new(utf8: &'b str, utf16: &'a [u16]) -> Self {
         Self {
-            utf16_str: utf16,
             utf8_str: utf8,
-            utf16_index: 0,
+            utf16_str: utf16,
             utf8_index: 0,
+            utf16_index: 0,
         }
     }
 
     pub(crate) fn convert_to_utf8_index(&mut self, utf16_index: usize) -> usize {
         debug_assert!(utf16_index >= self.utf16_index);
-        while let Some((u16_index, u8_index)) = self.next() {
+        while let Some((u8_index, u16_index)) = self.next() {
             if u16_index >= utf16_index {
                 debug_assert!(u16_index == utf16_index);
                 return u8_index;
@@ -66,7 +66,7 @@ impl<'a, 'b> Utf16Utf8IndexConverter<'a, 'b> {
 
     pub(crate) fn convert_to_utf16_index(&mut self, utf8_index: usize) -> usize {
         debug_assert!(utf8_index >= self.utf8_index);
-        while let Some((u16_index, u8_index)) = self.next() {
+        while let Some((u8_index, u16_index)) = self.next() {
             if u8_index >= utf8_index {
                 debug_assert!(u8_index == utf8_index);
                 return u16_index;
@@ -86,7 +86,7 @@ fn utf16_to_utf8_conversion_test() {
         [0x61u16, 0x6E, 0x20, 0x5DC, 0x5DC, 0x5e9, 0x5D5, 0x5DF, 0x21],
         "an ללשון!"
     );
-    let mut converter = Utf16Utf8IndexConverter::new(&u16_str, u8_str);
+    let mut converter = UtfIndexConverter::new(u8_str, &u16_str);
     assert_eq!(converter.convert_to_utf8_index(0), 0);
     assert_eq!(converter.convert_to_utf8_index(1), 1);
     assert_eq!(converter.convert_to_utf8_index(2), 2);
@@ -101,11 +101,11 @@ fn utf16_to_utf8_conversion_test() {
         [0x0068, 0x0069, 0xd83d, 0xde43, 0xd83d, 0xdc99, 0xd83d, 0xdc9a],
         "hi🙃💙💚"
     );
-    let converter = Utf16Utf8IndexConverter::new(&u16_str, u8_str);
+    let converter = UtfIndexConverter::new(u8_str, &u16_str);
     assert_eq!(converter.collect::<Vec<_>>(), &[
-        (0, 0), (1, 1), (2, 2), (4, 6), (6, 10), (8, 14)
+        (0, 0), (1, 1), (2, 2), (6, 4), (10, 6), (14, 8)
     ]);
-    let mut converter = Utf16Utf8IndexConverter::new(&u16_str, u8_str);
+    let mut converter = UtfIndexConverter::new(u8_str, &u16_str);
     assert_eq!(converter.convert_to_utf8_index(2), 2);
     assert_eq!(converter.convert_to_utf8_index(4), 6);
     assert_eq!(converter.convert_to_utf8_index(8), 14);
@@ -120,11 +120,11 @@ fn utf8_to_utf16_conversion_test() {
         [0x0068, 0x0069, 0xd83d, 0xde43, 0xd83d, 0xdc99, 0xd83d, 0xdc9a],
         "hi🙃💙💚"
     );
-    let converter = Utf16Utf8IndexConverter::new(&u16_str, u8_str);
+    let converter = UtfIndexConverter::new(u8_str, &u16_str);
     assert_eq!(converter.collect::<Vec<_>>(), &[
-        (0, 0), (1, 1), (2, 2), (4, 6), (6, 10), (8, 14)
+        (0, 0), (1, 1), (2, 2), (6, 4), (10, 6), (14, 8)
     ]);
-    let mut converter = Utf16Utf8IndexConverter::new(&u16_str, u8_str);
+    let mut converter = UtfIndexConverter::new(u8_str, &u16_str);
     assert_eq!(converter.convert_to_utf16_index(2), 2);
     assert_eq!(converter.convert_to_utf16_index(6), 4);
     assert_eq!(converter.convert_to_utf16_index(14), 8);

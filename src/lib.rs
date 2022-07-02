@@ -40,7 +40,7 @@ mod formatted_string;
 mod text_analyzer;
 mod text_layout;
 mod glyph_painter;
-mod utf16_utf8_index_converter;
+mod utf_index_converter;
 
 mod generic_backend;
 
