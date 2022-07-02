@@ -102,12 +102,11 @@ pub fn get_family(name: &str) -> Option<FontFamily> {
     FontFunctionsBackend::get_family(name)
 }
 
-pub fn get_matching_font(
-    family: &str,
-    weight: OpenTypeFontWeight,
-    slant: FontSlant,
-    width: OpenTypeFontWidth,
-) -> Option<Font> {
+pub fn get_matching_font<T, U>(family: &str, weight: T, slant: FontSlant, width: U) -> Option<Font>
+where
+    T: Into<OpenTypeFontWeight>,
+    U: Into<OpenTypeFontWidth>,
+{
     get_family(family).map(|f| f.get_matching_font(weight, slant, width))
 }
 
@@ -125,11 +124,11 @@ impl<B: GenericFontFamilyBackend> FontFamily<B> {
         self.backend.get_styles()
     }
 
-    pub fn get_matching_font(&self,
-        weight: OpenTypeFontWeight,
-        slant: FontSlant,
-        width: OpenTypeFontWidth,
-    ) -> Font {
+    pub fn get_matching_font<T, U>(&self, weight: T, slant: FontSlant, width: U) -> Font
+    where
+        T: Into<OpenTypeFontWeight>,
+        U: Into<OpenTypeFontWidth>,
+    {
         todo!()
     }
 }
