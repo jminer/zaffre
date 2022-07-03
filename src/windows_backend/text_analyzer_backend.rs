@@ -4,7 +4,9 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::{iter, ptr};
 
+use nalgebra::Point2;
 use num::Integer;
+use smallvec::SmallVec;
 use windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
 use windows::Win32::Globalization::{GetUserDefaultLocaleName, GetThreadLocale, GetLocaleInfoEx, LOCALE_SNAME, LCIDToLocaleName};
 use windows::Win32::Graphics::DirectWrite::{IDWriteTextAnalysisSink, IDWriteTextAnalysisSink_Impl, DWRITE_SCRIPT_ANALYSIS, DWRITE_LINE_BREAKPOINT, IDWriteNumberSubstitution, IDWriteTextAnalysisSource, IDWriteTextAnalysisSource_Impl, DWRITE_READING_DIRECTION_LEFT_TO_RIGHT, DWRITE_NUMBER_SUBSTITUTION_METHOD_NONE, IDWriteTextAnalyzer, DWRITE_SHAPING_TEXT_PROPERTIES, DWRITE_SHAPING_GLYPH_PROPERTIES, DWRITE_GLYPH_OFFSET};
@@ -13,7 +15,7 @@ use windows::core::{implement, PCWSTR};
 
 use crate::font::Font;
 use crate::generic_backend::{GenericTextAnalyzerBackend, GenericTextAnalyzerRunBackend};
-use crate::text_analyzer::{TextAnalyzerRun, TextDirection};
+use crate::text_analyzer::{TextAnalyzerRun, TextDirection, TextAnalyzerGlyphRun};
 use crate::utf_index_converter::UtfIndexConverter;
 
 use super::font_backend::DWRITE_FACTORY;
@@ -579,7 +581,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
         run: TextAnalyzerRun,
         font: &Font,
         font_size: f32,
-    ) {
+    ) -> TextAnalyzerGlyphRun {
         let mut last_index_pair = self.last_index_pair.get();
         if text_range.start < last_index_pair.0 as usize {
             self.last_index_pair.set((0, 0));
@@ -594,7 +596,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
         let wtext_end = converter.convert_to_utf16_index(text_range.end);
         self.last_index_pair.set((converter.utf8_index as u32, converter.utf16_index as u32));
 
-        let mut locale_name = get_thread_locale();
+        let locale_name = get_thread_locale();
         let is_right_to_left = run.backend.bidi_levels
             .expect("bidi level not set")
             .resolved_level.is_odd();
@@ -611,7 +613,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
 
             let mut glyph_buffer_capacity = 8;
             let mut glyph_count: u32 = 0;
-            let mut glyphs = Vec::<u16>::new();
+            let mut glyphs = SmallVec::<[u16; 32]>::new();
             let mut glyph_props = Vec::<DWRITE_SHAPING_GLYPH_PROPERTIES>::new();
             glyphs.resize(glyph_buffer_capacity, 0);
             glyph_props.resize(glyph_buffer_capacity, Default::default()); // TODO: don't init?
@@ -650,8 +652,8 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
                 break;
             }
 
-            let mut glyph_advances = Vec::<f32>::new();
-            let mut glyph_offsets = Vec::<DWRITE_GLYPH_OFFSET>::new();
+            let mut glyph_advances = SmallVec::<[f32; 32]>::new();
+            let mut glyph_offsets = SmallVec::<[DWRITE_GLYPH_OFFSET; 32]>::new();
             glyph_advances.resize(glyphs.len(), 0.0);
             glyph_offsets.resize(glyphs.len(), Default::default());
             self.analyzer.GetGlyphPlacements(
@@ -674,6 +676,19 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
                 glyph_advances.as_mut_ptr(),
                 glyph_offsets.as_mut_ptr()
             ).expect("GetGlyphPlacements() failed");
+
+            TextAnalyzerGlyphRun {
+                run,
+                cluster_map: cluster_map.iter().map(|i| *i as usize).collect(),
+                glyphs,
+                glyph_advances,
+                glyph_offsets: glyph_offsets.iter()
+                    .map(|offset| Point2::new(
+                        offset.advanceOffset,
+                        -offset.ascenderOffset
+                    ))
+                    .collect(),
+            }
         }
     }
 

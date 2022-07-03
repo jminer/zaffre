@@ -1,5 +1,8 @@
 use std::ops::Range;
 
+use nalgebra::Point2;
+use smallvec::SmallVec;
+
 use crate::font::Font;
 use crate::generic_backend::{GenericTextAnalyzerRunBackend, GenericTextAnalyzerBackend};
 use crate::backend::text_analyzer_backend::{TextAnalyzerRunBackend, TextAnalyzerBackend};
@@ -26,6 +29,18 @@ impl TextAnalyzerRun {
     pub fn direction(&self) -> TextDirection {
         return self.direction;
     }
+}
+
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct TextAnalyzerGlyphRun {
+    pub run: TextAnalyzerRun,
+    // Maps from characters to glyphs.
+    pub cluster_map: SmallVec<[usize; 32]>,
+    // Glyphs in the font.
+    pub glyphs: SmallVec<[u16; 32]>,
+    pub glyph_advances: SmallVec<[f32; 32]>,
+    pub glyph_offsets: SmallVec<[Point2<f32>; 32]>,
 }
 
 /// There is currently no support for custom mapping from Unicode characters to glyphs. Also, there
@@ -63,7 +78,7 @@ impl TextAnalyzer {
         run: TextAnalyzerRun,
         font: &Font,
         font_size: f32,
-    ) {
+    ) -> TextAnalyzerGlyphRun {
         debug_assert!(run.text_range().contains(&text_range.start));
         debug_assert!(run.text_range().contains(&(text_range.end - 1)));
         self.backend.get_glyphs_and_positions(text_range, run, font, font_size)

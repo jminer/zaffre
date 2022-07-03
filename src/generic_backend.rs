@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::ops::Range;
 
 use crate::font::{OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, FontFamily, Font, FontDescription};
-use crate::text_analyzer::{TextAnalyzerRun, TextAnalyzer};
+use crate::text_analyzer::{TextAnalyzerRun, TextAnalyzer, TextAnalyzerGlyphRun};
 
 // region: font
 
@@ -84,7 +84,7 @@ pub trait GenericTextAnalyzerBackend: Debug {
         run: TextAnalyzerRun,
         font: &Font,
         font_size: f32,
-    );
+    ) -> TextAnalyzerGlyphRun;
 
 }
 
