@@ -625,7 +625,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
             // The DirectWrite docs recommend that the glyph buffer be 3 * textLength / 2 + 16
             // However, I can't think of a case when there would be more glyphs than characters.
             // Usually, it's the other way around, especially with non-Latin characters.
-            let mut glyph_buffer_capacity = self.wide_text.len() + 16;
+            let mut glyph_buffer_capacity = (wtext_end - wtext_start) + 16;
             let mut glyph_count: u32 = 0;
             let mut glyphs = SmallVec::<[u16; 32]>::new();
             let mut glyph_props = Vec::<DWRITE_SHAPING_GLYPH_PROPERTIES>::new();
@@ -633,7 +633,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
             glyph_props.resize(glyph_buffer_capacity, Default::default()); // TODO: don't init?
             loop {
                 let result = self.analyzer.GetGlyphs(
-                    PCWSTR(self.wide_text.as_ptr()),
+                    PCWSTR(self.wide_text.as_ptr().add(wtext_start)),
                     (wtext_end - wtext_start) as u32,
                     &font.backend.font_face,
                     false,
@@ -671,7 +671,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
             glyph_advances.resize(glyphs.len(), 0.0);
             glyph_offsets.resize(glyphs.len(), Default::default());
             self.analyzer.GetGlyphPlacements(
-                PCWSTR(self.wide_text.as_ptr()),
+                PCWSTR(self.wide_text.as_ptr().add(wtext_start)),
                 cluster_map.as_ptr(),
                 text_props.as_mut_ptr(),
                 (wtext_end - wtext_start) as u32,
