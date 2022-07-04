@@ -589,6 +589,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
         let mut converter = UtfIndexConverter {
             utf8_str: self.text(),
             utf16_str: self.wide_text.as_slice(),
+            initial: true,
             utf8_index: last_index_pair.0 as usize,
             utf16_index: last_index_pair.1 as usize,
         };

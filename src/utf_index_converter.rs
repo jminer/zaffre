@@ -14,6 +14,7 @@ fn utf8_code_point_byte_len(first_byte: u8) -> usize {
 pub(crate) struct UtfIndexConverter<'a, 'b> {
     pub(crate) utf8_str: &'b str,
     pub(crate) utf16_str: &'a [u16],
+    pub(crate) initial: bool,
     pub(crate) utf8_index: usize,
     pub(crate) utf16_index: usize,
 }
@@ -22,32 +23,31 @@ impl<'a, 'b> Iterator for UtfIndexConverter<'a, 'b> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let indexes = (self.utf8_index, self.utf16_index);
         if self.utf16_index >= self.utf16_str.len() {
-            if self.utf16_index == self.utf16_str.len() {
-                self.utf16_index += 1;
-                return Some(indexes);
-            }
+            debug_assert!(self.utf16_index == self.utf16_str.len());
             return None;
         }
+        if !self.initial {
+            self.utf16_index += if self.utf16_str[self.utf16_index].is_utf16_surrogate() {
+                2
+            } else {
+                1
+            };
 
-        self.utf16_index += if self.utf16_str[self.utf16_index].is_utf16_surrogate() {
-            2
-        } else {
-            1
-        };
+            self.utf8_index += utf8_code_point_byte_len(self.utf8_str.as_bytes()[self.utf8_index]);
+        }
+        self.initial = false;
 
-        self.utf8_index += utf8_code_point_byte_len(self.utf8_str.as_bytes()[self.utf8_index]);
-
-        Some(indexes)
+        Some((self.utf8_index, self.utf16_index))
     }
 }
 
 impl<'a, 'b> UtfIndexConverter<'a, 'b> {
-    fn new(utf8: &'b str, utf16: &'a [u16]) -> Self {
+    pub(crate) fn new(utf8: &'b str, utf16: &'a [u16]) -> Self {
         Self {
             utf8_str: utf8,
             utf16_str: utf16,
+            initial: true,
             utf8_index: 0,
             utf16_index: 0,
         }
@@ -55,6 +55,10 @@ impl<'a, 'b> UtfIndexConverter<'a, 'b> {
 
     pub(crate) fn convert_to_utf8_index(&mut self, utf16_index: usize) -> usize {
         debug_assert!(utf16_index >= self.utf16_index);
+        // Support converting the same index multiple times.
+        if utf16_index == self.utf16_index {
+            return self.utf8_index;
+        }
         while let Some((u8_index, u16_index)) = self.next() {
             if u16_index >= utf16_index {
                 debug_assert!(u16_index == utf16_index);
@@ -66,6 +70,10 @@ impl<'a, 'b> UtfIndexConverter<'a, 'b> {
 
     pub(crate) fn convert_to_utf16_index(&mut self, utf8_index: usize) -> usize {
         debug_assert!(utf8_index >= self.utf8_index);
+        // Support converting the same index multiple times.
+        if utf8_index == self.utf8_index {
+            return self.utf16_index;
+        }
         while let Some((u8_index, u16_index)) = self.next() {
             if u8_index >= utf8_index {
                 debug_assert!(u8_index == utf8_index);
@@ -107,6 +115,7 @@ fn utf16_to_utf8_conversion_test() {
     ]);
     let mut converter = UtfIndexConverter::new(u8_str, &u16_str);
     assert_eq!(converter.convert_to_utf8_index(2), 2);
+    assert_eq!(converter.convert_to_utf8_index(2), 2);
     assert_eq!(converter.convert_to_utf8_index(4), 6);
     assert_eq!(converter.convert_to_utf8_index(8), 14);
 }
@@ -125,6 +134,7 @@ fn utf8_to_utf16_conversion_test() {
         (0, 0), (1, 1), (2, 2), (6, 4), (10, 6), (14, 8)
     ]);
     let mut converter = UtfIndexConverter::new(u8_str, &u16_str);
+    assert_eq!(converter.convert_to_utf16_index(2), 2);
     assert_eq!(converter.convert_to_utf16_index(2), 2);
     assert_eq!(converter.convert_to_utf16_index(6), 4);
     assert_eq!(converter.convert_to_utf16_index(14), 8);
