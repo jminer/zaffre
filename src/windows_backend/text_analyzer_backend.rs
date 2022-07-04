@@ -622,7 +622,10 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
             cluster_map.resize(wtext_end - wtext_start, 0);
             text_props.resize(wtext_end - wtext_start, Default::default());
 
-            let mut glyph_buffer_capacity = 8;
+            // The DirectWrite docs recommend that the glyph buffer be 3 * textLength / 2 + 16
+            // However, I can't think of a case when there would be more glyphs than characters.
+            // Usually, it's the other way around, especially with non-Latin characters.
+            let mut glyph_buffer_capacity = self.wide_text.len() + 16;
             let mut glyph_count: u32 = 0;
             let mut glyphs = SmallVec::<[u16; 32]>::new();
             let mut glyph_props = Vec::<DWRITE_SHAPING_GLYPH_PROPERTIES>::new();
