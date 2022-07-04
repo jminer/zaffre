@@ -566,10 +566,14 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
                 self.run_analysis_sink.clone()
             ).expect("AnalyzeNumberSubstitution() failed");
 
-            let runs = self.run_analysis_sink_data.runs.take();
+            let mut runs = self.run_analysis_sink_data.runs.take();
             self.run_analysis_sink_data.runs.set(runs.clone()); // TODO: get rid of clone
 
-            // TODO: loop through run indexes and convert from UTF-16 to UTF-8
+            let mut converter = UtfIndexConverter::new(&self.text, self.wide_text.as_slice());
+            for run in runs.iter_mut() {
+                run.text_range.start = converter.convert_to_utf8_index(run.text_range.start);
+                run.text_range.end = converter.convert_to_utf8_index(run.text_range.end);
+            }
 
             runs
         }
