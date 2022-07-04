@@ -573,6 +573,12 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
             for run in runs.iter_mut() {
                 run.text_range.start = converter.convert_to_utf8_index(run.text_range.start);
                 run.text_range.end = converter.convert_to_utf8_index(run.text_range.end);
+
+                // The bidi level should never be None
+                run.direction = match run.backend.bidi_levels {
+                    Some(lvs) if lvs.resolved_level.is_odd() => TextDirection::RightToLeft,
+                    _ => TextDirection::LeftToRight,
+                };
             }
 
             runs
