@@ -691,9 +691,32 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
                 glyph_offsets.as_mut_ptr()
             ).expect("GetGlyphPlacements() failed");
 
+            let mut utf8_cluster_map = SmallVec::<[usize; 32]>::with_capacity(self.text.len());
+            {
+                let mut converter = UtfIndexConverter {
+                    utf8_str:  &self.text,
+                    utf16_str: self.wide_text.as_slice(),
+                    initial: true,
+                    utf8_index: text_range.start,
+                    utf16_index: wtext_start,
+                };
+                // The unwrap() can't happen because the converter will return at least one pair.
+                let mut next_index_pair = converter.next().unwrap();
+                let mut wide_index = 0;
+                for i in text_range.clone() {
+                    if i == next_index_pair.0 {
+                        wide_index = next_index_pair.1;
+                        // The unwrap() can't happend because the converter returns the end index,
+                        // and the loop doesn't loop to it.
+                        next_index_pair = converter.next().unwrap();
+                    }
+                    utf8_cluster_map.push(cluster_map[wide_index - wtext_start] as usize);
+                }
+            }
+
             TextAnalyzerGlyphRun {
                 run,
-                cluster_map: cluster_map.iter().map(|i| *i as usize).collect(),
+                cluster_map: utf8_cluster_map,
                 glyphs,
                 glyph_advances,
                 glyph_offsets: glyph_offsets.iter()

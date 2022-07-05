@@ -24,6 +24,7 @@ fn main() {
     let font = font_family.get_styles()[0].get_font();
 
     print_analysis("First, a plain English sentence.", &font);
+    print_analysis("A 🍕pizza", &font);
     print_analysis("Then, свобода, as a test", &font);
     print_analysis("Something including a עברית word.", &font);
     // TODO: one sample with multiple bidi levels

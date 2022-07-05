@@ -15,6 +15,7 @@ fn print_analysis(string: &str) {
 
 fn main() {
     print_analysis("First, a plain English sentence.");
+    print_analysis("A 🍕pizza");
     print_analysis("Then, свобода, as a test");
     print_analysis("Something including a עברית word.");
     // TODO: one sample with multiple bidi levels
