@@ -129,7 +129,7 @@ impl<B: GenericFontFamilyBackend> FontFamily<B> {
         T: Into<OpenTypeFontWeight>,
         U: Into<OpenTypeFontWidth>,
     {
-        todo!()
+        self.backend.get_matching_font(weight.into(), slant, width.into())
     }
 }
 
