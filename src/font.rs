@@ -102,12 +102,18 @@ pub fn get_family(name: &str) -> Option<FontFamily> {
     FontFunctionsBackend::get_family(name)
 }
 
-pub fn get_matching_font<T, U>(family: &str, weight: T, slant: FontSlant, width: U) -> Option<Font>
+pub fn get_matching_font<T, U>(
+    family: &str,
+    weight: T,
+    slant: FontSlant,
+    width: U,
+    size: f32,
+) -> Option<Font>
 where
     T: Into<OpenTypeFontWeight>,
     U: Into<OpenTypeFontWidth>,
 {
-    get_family(family).map(|f| f.get_matching_font(weight, slant, width))
+    get_family(family).map(|f| f.get_matching_font(weight, slant, width, size))
 }
 
 
@@ -124,12 +130,12 @@ impl<B: GenericFontFamilyBackend> FontFamily<B> {
         self.backend.get_styles()
     }
 
-    pub fn get_matching_font<T, U>(&self, weight: T, slant: FontSlant, width: U) -> Font
+    pub fn get_matching_font<T, U>(&self, weight: T, slant: FontSlant, width: U, size: f32) -> Font
     where
         T: Into<OpenTypeFontWeight>,
         U: Into<OpenTypeFontWidth>,
     {
-        self.backend.get_matching_font(weight.into(), slant, width.into())
+        self.backend.get_matching_font(weight.into(), slant, width.into(), size)
     }
 }
 
@@ -169,8 +175,11 @@ impl<B: GenericFontDescriptionBackend> FontDescription<B> {
         self.backend.has_color_glyphs()
     }
 
-    pub fn get_font(&self) -> Font {
-        self.backend.get_font()
+    pub fn get_font(&self, size: f32) -> Font {
+        // Core Text, Pango, Skia, System.Drawing.Font, and QFont all put the size in their Font
+        // type. DirectWrite seems to be the only one that doesn't. It instead has a separate
+        // parameter to GetGlyphPlacements().
+        self.backend.get_font(size)
     }
 }
 
@@ -180,6 +189,10 @@ pub struct Font<B: GenericFontBackend = FontBackend> {
 }
 
 impl Font {
+    pub fn size(&self) -> f32 {
+        self.backend.size()
+    }
+
     pub fn description(&self) -> FontDescription {
         self.backend.description()
     }

@@ -179,6 +179,7 @@ impl GenericFontFamilyBackend for FontFamilyBackend {
         weight: OpenTypeFontWeight,
         style: FontSlant,
         width: OpenTypeFontWidth,
+        size: f32,
     ) -> Font {
         let dwrite_style = to_dwrite_style(style);
         unsafe {
@@ -191,6 +192,7 @@ impl GenericFontFamilyBackend for FontFamilyBackend {
             Font {
                 backend: FontBackend {
                     font_face,
+                    size,
                 }
             }
         }
@@ -269,12 +271,13 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
         false
     }
 
-    fn get_font(&self) -> Font {
+    fn get_font(&self, size: f32) -> Font {
         unsafe {
             let font_face = self.font_desc.CreateFontFace().expect("CreateFontFace() failed");
             Font {
                 backend: FontBackend {
                     font_face,
+                    size,
                 }
             }
         }
@@ -284,9 +287,14 @@ impl GenericFontDescriptionBackend for FontDescriptionBackend {
 #[derive(Debug, Clone)]
 pub struct FontBackend {
     pub(crate) font_face: IDWriteFontFace,
+    pub(crate) size: f32,
 }
 
 impl GenericFontBackend for FontBackend {
+    fn size(&self) -> f32 {
+        self.size
+    }
+
     fn description(&self) -> FontDescription {
         unsafe {
             let collection = get_dwrite_system_collection();

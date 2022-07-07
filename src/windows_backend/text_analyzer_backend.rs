@@ -590,7 +590,6 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
         text_range: Range<usize>,
         run: TextAnalyzerRun,
         font: &Font,
-        font_size: f32,
     ) -> TextAnalyzerGlyphRun {
         let mut last_index_pair = self.last_index_pair.get();
         if text_range.start < last_index_pair.0 as usize {
@@ -679,7 +678,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
                 glyph_props.as_ptr(),
                 glyphs.len() as u32,
                 &font.backend.font_face,
-                font_size,
+                font.size(),
                 false,
                 is_right_to_left,
                 script_analysis,

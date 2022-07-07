@@ -9,7 +9,7 @@ fn print_analysis(string: &str, font: &Font) {
     let analyzer = TextAnalyzer::new(string.to_owned());
     println!("{}", analyzer.text());
     for r in analyzer.get_runs() {
-       let glyph_run = analyzer.get_glyphs_and_positions(r.text_range(), r.clone(), &font, 15.0);
+       let glyph_run = analyzer.get_glyphs_and_positions(r.text_range(), r.clone(), &font);
        println!("{:#?}", glyph_run);
     }
     println!();
@@ -21,7 +21,7 @@ fn main() {
     let font_family = font::get_family("DejaVu Sans").or_else(|| font::get_family("Helvetica"))
         .or_else(|| font::get_family("Arial"))
         .expect("couldn't find font");
-    let font = font_family.get_styles()[0].get_font();
+    let font = font_family.get_styles()[0].get_font(15.0);
 
     print_analysis("First, a plain English sentence.", &font);
     print_analysis("A 🍕pizza", &font);

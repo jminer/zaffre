@@ -27,6 +27,7 @@ pub trait GenericFontFamilyBackend: Debug + Clone {
         weight: OpenTypeFontWeight,
         slant: FontSlant,
         width: OpenTypeFontWidth,
+        size: f32,
     ) -> Font;
 }
 
@@ -45,10 +46,12 @@ pub trait GenericFontDescriptionBackend: Debug + Clone {
 
     fn has_color_glyphs(&self) -> bool;
 
-    fn get_font(&self) -> Font;
+    fn get_font(&self, size: f32) -> Font;
 }
 
 pub trait GenericFontBackend: Debug + Clone {
+    fn size(&self) -> f32;
+
     fn description(&self) -> FontDescription;
 }
 
@@ -83,7 +86,6 @@ pub trait GenericTextAnalyzerBackend: Debug {
         text_range: Range<usize>,
         run: TextAnalyzerRun,
         font: &Font,
-        font_size: f32,
     ) -> TextAnalyzerGlyphRun;
 
 }

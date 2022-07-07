@@ -77,10 +77,9 @@ impl TextAnalyzer {
         text_range: Range<usize>,
         run: TextAnalyzerRun,
         font: &Font,
-        font_size: f32,
     ) -> TextAnalyzerGlyphRun {
         debug_assert!(run.text_range().contains(&text_range.start));
         debug_assert!(run.text_range().contains(&(text_range.end - 1)));
-        self.backend.get_glyphs_and_positions(text_range, run, font, font_size)
+        self.backend.get_glyphs_and_positions(text_range, run, font)
     }
 }
