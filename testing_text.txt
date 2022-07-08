@@ -1,0 +1,12 @@
+
+Here is a list of stuff to test in text support:
+
+- A font that has letters that overlap adjacent letters horizontally, like Italianno. Some letters, like "g" in Italianno can even overlap two characters. When selecting a letter, parts of letters that aren't selected but overlap the selection should probably be drawn the selection color.
+- Bidi text, including wrapping
+- Rendering and editing Devanagari, like कि, which this page gives as an example: https://en.wikipedia.org/wiki/Complex_text_layout
+- That antialiasing uses linear blending, not the stupid sRGB blending.
+- Emoji
+- Font fallback
+- A font with ligatures
+- That the text cursor can go inside the ligature and that each letter in the ligature can be individually selected.
+- A ligature with individual letters colored differently.
