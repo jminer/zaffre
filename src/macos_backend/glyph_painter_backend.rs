@@ -24,4 +24,6 @@ impl GenericGlyphPainterBackend for GlyphPainterBackend {
     fn new() -> Self {
         Self { }
     }
+
+    // TODO: call CGContextSetTextPosition() and CGContextShowGlyphsAtPositions()
 }

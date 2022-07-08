@@ -9,6 +9,7 @@ use crate::text_analyzer::TextAnalyzerRun;
 
 #[derive(Debug, Clone)]
 pub struct TextAnalyzerRunBackend {
+    // leave empty I guess
 }
 
 impl GenericTextAnalyzerRunBackend for TextAnalyzerRunBackend {
@@ -18,7 +19,6 @@ impl GenericTextAnalyzerRunBackend for TextAnalyzerRunBackend {
 pub struct TextAnalyzerBackend {
     text: String,
     cf_string: CFAttributedString,
-    line: core_text::line::CTLine,
 }
 
 impl Debug for TextAnalyzerBackend {
@@ -29,14 +29,16 @@ impl Debug for TextAnalyzerBackend {
 
 impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
     fn new(text: String) -> Self {
-        let cf_string;
-        let line = CTLine::new_with_attributed_string(cf_string);
         todo!()
     }
 
     fn get_runs(&self) -> Vec<TextAnalyzerRun> {
-        let ct_runs = self.line.glyph_runs();
+        let line = CTLine::new_with_attributed_string(self.cf_string);
+        let ct_runs = line.glyph_runs();
         let runs = Vec::with_capacity(ct_runs.len() as usize);
         runs
     }
+
+    // To get glyphs, we have to create a new CTLine for every call (or drastically change the
+    // TextAnalyzer interface).
 }
