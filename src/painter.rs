@@ -1,6 +1,9 @@
 use std::any::Any;
 use std::backtrace::Backtrace;
 
+use nalgebra::Point2;
+
+use crate::font::Font;
 use crate::{Color, PathSegment};
 use crate::path::StrokeStyle;
 
@@ -45,6 +48,27 @@ pub trait Painter {
     fn translate(&mut self, x: f64, y: f64);
 
     fn scale(&mut self, x: f64, y: f64);
+
+    fn draw_glyphs(
+        &mut self,
+        glyphs: &[u16],
+        positions: &[nalgebra::Point2<f32>],
+        origin: nalgebra::Point2<f32>,
+        font: &Font,
+        brush: &Brush,
+    );
+
+    // if adding a PDF backend, it would need to have this, like cairo and Skia:
+    //fn draw_glyphs_with_text(
+    //    &mut self,
+    //    glyphs: &[u16],
+    //    positions: &[Point2<f32>],
+    //    origin: Point2<f32>,
+    //    clusters: &[usize],
+    //    text: &str,
+    //    font: &Font,
+    //    brush: &Brush,
+    //);
 }
 
 trait ToPath {

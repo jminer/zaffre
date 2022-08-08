@@ -2,7 +2,11 @@
 use std::fmt::Debug;
 use std::ops::Range;
 
-use crate::font::{OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, FontFamily, Font, FontDescription};
+use glam::Affine2;
+use nalgebra::Point2;
+use smallvec::SmallVec;
+
+use crate::font::{OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, FontFamily, Font, FontDescription, GlyphImage};
 use crate::text_analyzer::{TextAnalyzerRun, TextAnalyzer, TextAnalyzerGlyphRun};
 
 // region: font
@@ -53,18 +57,16 @@ pub trait GenericFontBackend: Debug + Clone {
     fn size(&self) -> f32;
 
     fn description(&self) -> FontDescription;
+
+    fn draw_glyphs(
+        &self,
+        glyphs: &[u16],
+        offsets: &[Point2<f32>],
+        transform: Affine2,
+    ) -> SmallVec<[GlyphImage; 32]>;
 }
 
-// endregion:
-
-// region: glyph_painter
-
-pub(crate) trait GenericGlyphImageSlabBackend: Debug + Clone {
-    fn new(width: u32, height: u32) -> Self;
-}
-
-pub trait GenericGlyphPainterBackend: Debug + Clone {
-    fn new() -> Self;
+pub trait GenericGlyphImageBackend: Debug + Clone {
 }
 
 // endregion:

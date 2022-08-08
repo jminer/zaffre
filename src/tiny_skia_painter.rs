@@ -3,8 +3,12 @@ use std::backtrace::Backtrace;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use glam::Affine2;
+use nalgebra::Point2;
+use smallvec::SmallVec;
 use tiny_skia::{Paint, PathBuilder, Pixmap, Shader, Stroke};
 
+use crate::font::{Font, GlyphImageFormat};
 use crate::{Color, PathSegment};
 use crate::painter::{Brush, Error, Painter};
 use crate::path::{ArcSegment, LineCap, LineJoin, StrokeStyle};
@@ -191,6 +195,96 @@ impl<'a> Painter for TinySkiaPainter {
 
     fn scale(&mut self, x: f64, y: f64) {
         self.transform = self.transform.post_scale(x as f32, y as f32);
+    }
+
+    // The `origin` is the position of the text's baseline
+    fn draw_glyphs(
+        &mut self,
+        glyphs: &[u16],
+        positions: &[nalgebra::Point2<f32>],
+        baseline_origin: nalgebra::Point2<f32>,
+        font: &Font,
+        brush: &Brush,
+    ) {
+        // DirectWrite, Skia, Core Graphics, and Qt all have the origin be the position of the
+        // baseline. (Skia and Core Graphics don't say in their docs, but I tested Skia with
+        // https://fiddle.skia.org/c/25dc79ab3c8586f7a01c50e610a3d161 and found a Core Graphics code
+        // example.)
+        let color = match brush {
+            Brush::Solid(c) => c,
+            // TODO: pick one color from gradients instead of panicking?
+            // I need a way to set a tiny-skia ClipMask to an A8 image to implement other brushes.
+            // Then it could set the clip mask and fill a rect with the brush.
+            _ => panic!("only solid color text is implemented for TinySkiaPainter"),
+        };
+        // TODO: write an object that caches rendered glyphs in a font atlas
+        // it only stores them if the transform has no rotation or shear
+        let offsets =
+            positions.iter().map(|pos| Point2::new(pos.x.fract(), pos.y.fract()))
+            .collect::<SmallVec<[_; 32]>>();
+        let glyph_images = font.draw_glyphs(glyphs, &offsets, Affine2::IDENTITY);
+        let mut pixmap = self.pixmap.borrow_mut();
+        let pixmap_width = pixmap.width();
+        let pixel_data = pixmap.data_mut();
+        for (i, glyph_image) in glyph_images.iter().enumerate() {
+            let tk_points = &mut [tiny_skia::Point { x: baseline_origin.x + positions[i].x, y: baseline_origin.y + positions[i].y }];
+            self.transform.map_points(tk_points);
+            let pos = Point2::new(tk_points[0].x, tk_points[0].y);
+            dbg!(pos);
+            let ipos = Point2::new(pos.x.floor() as u32, pos.y.floor() as u32);
+            const PIXMAP_PIXEL_SIZE: usize = 4;
+            match glyph_image.format {
+                GlyphImageFormat::Alpha1x1 => {
+                    for y in 0..glyph_image.bounding_size.height {
+                        let row_ptr = unsafe {
+                            glyph_image.data_ptr.add((glyph_image.stride * y) as usize)
+                        };
+                        for x in 0..glyph_image.bounding_size.width {
+                            let glyph_alpha = unsafe {
+                                *row_ptr.add(x as usize)
+                            };
+                            let pixmap_index =
+                                (pixmap_width * (ipos.y + y) + (ipos.x + x)) as usize * PIXMAP_PIXEL_SIZE;
+                            pixel_data[pixmap_index+0] = 255 - glyph_alpha;
+                            pixel_data[pixmap_index+1] = 255 - glyph_alpha;
+                            pixel_data[pixmap_index+2] = 255 - glyph_alpha;
+                            //pixel_data[pixmap_index+3] = glyph_alpha;
+                        }
+                    }
+                },
+                GlyphImageFormat::Alpha3x1 => {
+                    for x in 0..glyph_image.bounding_size.width {
+                        for y in 0..glyph_image.bounding_size.height {
+                            unsafe {
+                                let glyph_pixel_ptr = glyph_image.data_ptr
+                                    .add((glyph_image.stride * y + x) as usize * 3);
+                                let glyph_alpha_r = glyph_pixel_ptr.add(0).read();
+                                let glyph_alpha_g = glyph_pixel_ptr.add(1).read();
+                                let glyph_alpha_b = glyph_pixel_ptr.add(2).read();
+                                let pixmap_index =
+                                    (pixmap_width * (ipos.y + y) + (ipos.x + x)) as usize * PIXMAP_PIXEL_SIZE;
+                                // I know it's slower having the if inside the loop instead of
+                                // duplicating the loop, but I don't care about subpixel AA.
+                                if self.byte_order == TinySkiaPainterByteOrder::Rgba {
+                                    pixel_data[pixmap_index+0] = 255-glyph_alpha_r;
+                                    pixel_data[pixmap_index+1] = 255-glyph_alpha_g;
+                                    pixel_data[pixmap_index+2] = 255-glyph_alpha_b;
+                                } else if self.byte_order == TinySkiaPainterByteOrder::Bgra {
+                                    pixel_data[pixmap_index+0] = 255-glyph_alpha_b;
+                                    pixel_data[pixmap_index+1] = 255-glyph_alpha_g;
+                                    pixel_data[pixmap_index+2] = 255-glyph_alpha_r;
+                                }
+                                dbg!(pixmap_index);
+                            }
+                        }
+                    }
+                },
+                GlyphImageFormat::RgbaColor => todo!(),
+                GlyphImageFormat::BgraColor => todo!(),
+            }
+        }
+
+        println!("{:?}", glyph_images[0]);
     }
 
 }

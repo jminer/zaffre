@@ -1,5 +1,10 @@
-use crate::backend::font_backend::{FontFamilyBackend, FontDescriptionBackend, FontFunctionsBackend, FontBackend};
-use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend, GenericFontBackend};
+use glam::Affine2;
+use nalgebra::Point2;
+use smallvec::SmallVec;
+
+use crate::{Rect, Size2};
+use crate::backend::font_backend::{FontFamilyBackend, FontDescriptionBackend, FontFunctionsBackend, FontBackend, GlyphImageBackend};
+use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend, GenericFontBackend, GenericGlyphImageBackend};
 
 // Font.
 //
@@ -195,6 +200,91 @@ impl Font {
 
     pub fn description(&self) -> FontDescription {
         self.backend.description()
+    }
+
+    pub fn draw_glyphs(
+        &self,
+        glyphs: &[u16],
+        offsets: &[Point2<f32>],
+        transform: Affine2,
+    ) -> SmallVec<[GlyphImage; 32]> {
+        // It seems like it's possible to get a glyph rendered into app-chosen memory using
+        // IDWriteGlyphRunAnalysis::CreateAlphaTexture() and CGBitmapContextCreate(). However,
+        // FreeType doesn't support it. It only renders to an FT_Bitmap, which you can then access
+        // its buffer pointer. So it's easy to access the bitmap memory, but you can't allocate it.
+        //
+        // This function returns a GlyphImage so that the caller can submit a GPU command to copy it
+        // to a GPU image (font atlas), and when the command is finished, the GPU can notify the CPU
+        // and the GlyphImage can be dropped.
+        self.backend.draw_glyphs(glyphs, offsets, transform)
+    }
+
+    // For each glyph, gets the bounding rectangle of the glyph's shape, relative to the glyphs's
+    // layout box. Microsoft calls the bounding rectangle the "black box."
+    //pub fn get_glyph_bounding_rects(&self, glyphs: &[u16]) -> Vec<Rect<f32>>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FontAntialiasing {
+    None,
+    Grayscale,
+    Subpixel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GlyphImageFormat {
+    // Each pixel has an alpha value stored in one byte.
+    Alpha1x1,
+    // Each pixel has alpha values stored in three bytes, used for subpixel antialiasing.
+    Alpha3x1,
+    // Each pixel has a full 32-bit color image (used for rendering emoji).
+    RgbaColor,
+    // Each pixel has a full 32-bit color image (used for rendering emoji).
+    BgraColor,
+}
+
+impl GlyphImageFormat {
+    pub(crate) fn pixel_size(self) -> usize {
+        match self {
+            GlyphImageFormat::Alpha1x1 => 1,
+            GlyphImageFormat::Alpha3x1 => 3,
+            GlyphImageFormat::RgbaColor => 4,
+            GlyphImageFormat::BgraColor => 4,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GlyphImage<B: GenericGlyphImageBackend = GlyphImageBackend> {
+    pub(crate) format: GlyphImageFormat,
+    pub(crate) data_ptr: *mut u8,
+    // The data pointer points to the top-left corner of the image, so only a size is needed.
+    pub(crate) bounding_size: Size2<u32>, // in pixels
+    pub(crate) stride: u32, // in pixels
+    pub(crate) baseline_origin: Point2<f32>,
+    pub(crate) backend: B,
+}
+
+impl<B: GenericGlyphImageBackend> GlyphImage<B> {
+    pub(crate) fn format(&self) -> GlyphImageFormat {
+        self.format
+    }
+
+    pub(crate) fn data_ptr(&self) -> *mut u8 {
+        self.data_ptr
+    }
+
+    pub(crate) fn bounding_size(&self) -> Size2<u32> {
+        self.bounding_size
+    }
+
+    // in pixels
+    pub(crate) fn stride(&self) -> u32 {
+        self.stride
+    }
+
+    pub(crate) fn baseline_origin(&self) -> Point2<f32> {
+        self.baseline_origin
     }
 }
 

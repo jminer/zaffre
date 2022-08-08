@@ -9,6 +9,7 @@ extern crate test;
 extern crate ahash;
 #[macro_use]
 extern crate ash;
+extern crate glam;
 #[macro_use]
 extern crate nalgebra;
 extern crate num;
@@ -39,7 +40,6 @@ mod tiny_skia_painter;
 mod formatted_string;
 mod text_analyzer;
 mod text_layout;
-mod glyph_painter;
 mod utf_index_converter;
 
 mod generic_backend;
@@ -69,7 +69,6 @@ pub use retained::{DrawCommand, ImageBuf, LinearGradient, ScalingMode, Rendering
 pub use painter::{AsPathIter, Brush, Error, Painter, PainterExt};
 pub use tiny_skia_painter::TinySkiaPainter;
 pub use vk_util::VulkanGlobals;
-pub use glyph_painter::GlyphPainter;
 
 pub mod text {
     pub use crate::formatted_string::{Format, LineStyle, FormattedString, SmallType};
