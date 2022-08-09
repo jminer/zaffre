@@ -373,11 +373,8 @@ impl GenericFontBackend for FontBackend {
                 let offset = offsets[i];
                 assert!(offset.x < 1.0);
                 assert!(offset.y < 1.0);
-                let horiz_bearing_du = metrics.leftSideBearing + metrics.rightSideBearing;
-                let vert_bearing_du = metrics.topSideBearing + metrics.bottomSideBearing;
                 dbg!(metrics);
                 dbg!(font_metrics);
-                dbg!(horiz_bearing_du, vert_bearing_du);
 
                 // https://docs.microsoft.com/en-us/windows/win32/directwrite/glyphs-and-glyph-runs#glyph-metrics
                 let advance_offset = f32::ceil(-design_units_to_px(metrics.leftSideBearing));
@@ -534,7 +531,6 @@ impl GenericFontBackend for FontBackend {
 
 #[derive(Debug, Clone)]
 pub struct GlyphImageBackend {
-    //bitmap_lock: IWICBitmapLock, // TODO: test that this compiles
     data: Rc<Vec<u8>>,
 }
 

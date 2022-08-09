@@ -17,7 +17,7 @@ impl<N: Copy> Color<N> {
     }
 }
 
-// https://www.khronos.org/registry/DataFormat/specs/1.2/dataformat.1.2.html#TRANSFER_SRGB
+// https://registry.khronos.org/DataFormat/specs/1.3/dataformat.1.3.html#TRANSFER_SRGB
 
 // SIMD could be used to do sRGB conversion much faster
 // https://stackoverflow.com/questions/29856006/sse-intrinsics-convert-32-bit-floats-to-unsigned-8-bit-integers

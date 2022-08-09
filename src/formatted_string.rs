@@ -71,6 +71,7 @@ impl Format {
             small: SmallType::Normal,
             fore_color: Color::from_rgba(0, 0, 0, 255),
             back_color: Color::from_rgba(0, 0, 0, 255),
+            // It may be easier to implement if this is fixed amount to add/sub between characters
             spacing: 1.0,
         }
     }

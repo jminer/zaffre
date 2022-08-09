@@ -712,6 +712,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
                     utf8_cluster_map.push(cluster_map[wide_index - wtext_start] as usize);
                 }
             }
+            //dbg!(&cluster_map, &utf8_cluster_map);
 
             TextAnalyzerGlyphRun {
                 run,
