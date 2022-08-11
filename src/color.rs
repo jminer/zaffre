@@ -17,12 +17,24 @@ impl<N: Copy> Color<N> {
     }
 }
 
+impl Color<u8> {
+    pub fn to_linear(self) -> Color<f32> {
+        Color {
+            red: srgb_to_linear(self.red),
+            green: srgb_to_linear(self.green),
+            blue: srgb_to_linear(self.blue),
+            alpha: self.alpha as f32 * (1.0 / 255.0),
+        }
+    }
+}
+
 // https://registry.khronos.org/DataFormat/specs/1.3/dataformat.1.3.html#TRANSFER_SRGB
 
 // SIMD could be used to do sRGB conversion much faster
 // https://stackoverflow.com/questions/29856006/sse-intrinsics-convert-32-bit-floats-to-unsigned-8-bit-integers
 
-fn srgb_to_linear(val: u8) -> f32 {
+// Formula from Khronos spec referenced by Vulkan.
+pub(crate) fn srgb_to_linear(val: u8) -> f32 {
     let val = val as f32 * (1.0 / 255.0);
     if val <= 0.04045 {
         val * (1.0 / 12.92)
@@ -31,7 +43,7 @@ fn srgb_to_linear(val: u8) -> f32 {
     }
 }
 
-fn linear_to_srgb(val: f32) -> u8 {
+pub(crate) fn linear_to_srgb(val: f32) -> u8 {
     let val = if val <= 0.0031308 {
         val * 12.92
     } else {

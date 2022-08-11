@@ -8,6 +8,7 @@ use nalgebra::Point2;
 use smallvec::SmallVec;
 use tiny_skia::{Paint, PathBuilder, Pixmap, Shader, Stroke};
 
+use crate::color::{srgb_to_linear, linear_to_srgb};
 use crate::font::{Font, GlyphImageFormat};
 use crate::{Color, PathSegment};
 use crate::painter::{Brush, Error, Painter};
@@ -210,13 +211,19 @@ impl<'a> Painter for TinySkiaPainter {
         // baseline. (Skia and Core Graphics don't say in their docs, but I tested Skia with
         // https://fiddle.skia.org/c/25dc79ab3c8586f7a01c50e610a3d161 and found a Core Graphics code
         // example.)
-        let color = match brush {
-            Brush::Solid(c) => c,
+        let color: Color<u8> = match brush {
+            Brush::Solid(c) => *c,
             // TODO: pick one color from gradients instead of panicking?
             // I need a way to set a tiny-skia ClipMask to an A8 image to implement other brushes.
             // Then it could set the clip mask and fill a rect with the brush.
             _ => panic!("only solid color text is implemented for TinySkiaPainter"),
         };
+        let color = match self.byte_order {
+            TinySkiaPainterByteOrder::Bgra =>
+                Color::from_rgba(color.blue, color.green, color.red, color.alpha),
+            TinySkiaPainterByteOrder::Rgba => color,
+        };
+        let color_lin = color.to_linear();
         // TODO: write an object that caches rendered glyphs in a font atlas
         // it only stores them if the transform has no rotation or shear
         let offsets =
@@ -243,12 +250,23 @@ impl<'a> Painter for TinySkiaPainter {
                             let glyph_alpha = unsafe {
                                 *row_ptr.add(x as usize)
                             };
+                            let src_alphaf = glyph_alpha as f32 * (1.0 / 255.0) * color_lin.alpha;
+                            let one_minus_src_alphaf = 1.0 - src_alphaf;
                             let pixmap_index =
                                 (pixmap_width * (ipos.y + y) + (ipos.x + x)) as usize * PIXMAP_PIXEL_SIZE;
-                            pixel_data[pixmap_index+0] = 255 - glyph_alpha;
-                            pixel_data[pixmap_index+1] = 255 - glyph_alpha;
-                            pixel_data[pixmap_index+2] = 255 - glyph_alpha;
-                            //pixel_data[pixmap_index+3] = glyph_alpha;
+                            let dest_r_lin = srgb_to_linear(pixel_data[pixmap_index+0]);
+                            let dest_g_lin = srgb_to_linear(pixel_data[pixmap_index+1]);
+                            let dest_b_lin = srgb_to_linear(pixel_data[pixmap_index+2]);
+                            let dest_alphaf = pixel_data[pixmap_index+3] as f32 * (1.0 / 255.0);
+                            // https://www.teamten.com/lawrence/graphics/premultiplication/
+                            pixel_data[pixmap_index+0] = linear_to_srgb(
+                                color_lin.red * src_alphaf + dest_r_lin * one_minus_src_alphaf);
+                            pixel_data[pixmap_index+1] = linear_to_srgb(
+                                color_lin.green * src_alphaf + dest_g_lin * one_minus_src_alphaf);
+                            pixel_data[pixmap_index+2] = linear_to_srgb(
+                                color_lin.blue * src_alphaf + dest_b_lin * one_minus_src_alphaf);
+                            pixel_data[pixmap_index+3] =
+                                ((src_alphaf + one_minus_src_alphaf * dest_alphaf) * 255.0) as u8;
                         }
                     }
                 },
