@@ -234,9 +234,12 @@ impl<'a> Painter for TinySkiaPainter {
         let pixmap_width = pixmap.width();
         let pixel_data = pixmap.data_mut();
         for (i, glyph_image) in glyph_images.iter().enumerate() {
-            let tk_points = &mut [tiny_skia::Point { x: baseline_origin.x + positions[i].x, y: baseline_origin.y + positions[i].y }];
-            self.transform.map_points(tk_points);
-            let pos = Point2::new(tk_points[0].x, tk_points[0].y);
+            let ts_points = &mut [tiny_skia::Point {
+                x: baseline_origin.x + positions[i].x,
+                y: baseline_origin.y + positions[i].y
+            }];
+            self.transform.map_points(ts_points);
+            let pos = Point2::new(ts_points[0].x, ts_points[0].y);
             dbg!(pos);
             let ipos = Point2::new(pos.x.floor() as u32, pos.y.floor() as u32);
             const PIXMAP_PIXEL_SIZE: usize = 4;
