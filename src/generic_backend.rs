@@ -1,12 +1,14 @@
 
 use std::fmt::Debug;
 use std::ops::Range;
+use std::rc::Rc;
 
 use glam::Affine2;
 use nalgebra::Point2;
 use smallvec::SmallVec;
 
 use crate::font::{OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, FontFamily, Font, FontDescription, GlyphImage};
+use crate::text::FormattedString;
 use crate::text_analyzer::{TextAnalyzerRun, TextAnalyzer, TextAnalyzerGlyphRun};
 
 // region: font
@@ -77,9 +79,11 @@ pub trait GenericTextAnalyzerRunBackend: Debug + Clone {
 }
 
 pub trait GenericTextAnalyzerBackend: Debug {
-    fn new(text: String) -> Self;
+    fn new() -> Self;
 
-    fn text(&self) -> &str;
+    fn text(&self) -> &String;
+
+    fn set_text(&mut self, text: &String);
 
     fn get_runs(&self) -> Vec<TextAnalyzerRun>;
 

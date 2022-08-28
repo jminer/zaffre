@@ -15,6 +15,7 @@ use windows::core::{implement, PCWSTR};
 
 use crate::font::Font;
 use crate::generic_backend::{GenericTextAnalyzerBackend, GenericTextAnalyzerRunBackend};
+use crate::text::FormattedString;
 use crate::text_analyzer::{TextAnalyzerRun, TextDirection, TextAnalyzerGlyphRun};
 use crate::utf_index_converter::UtfIndexConverter;
 
@@ -501,10 +502,8 @@ impl Debug for TextAnalyzerBackend {
 }
 
 impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
-    fn new(text: String) -> Self {
-        let wide_text = WideFfiString::new(&text);
-        assert!(wide_text.len() <= u32::MAX as usize); // DirectWrite uses u32
-        assert!(text.len() <= u32::MAX as usize);
+    fn new() -> Self {
+        let wide_text = WideFfiString::new(&"");
         let analyzer = DWRITE_FACTORY.with(|factory|
             unsafe { factory.CreateTextAnalyzer().expect("CreateTextAnalyzer() failed") }
         );
@@ -512,7 +511,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
         let run_analysis_sink: IDWriteTextAnalysisSink =
             DWriteRunAnalysisSink(run_analysis_sink_data.clone()).into();
         Self {
-            text,
+            text: String::new(),
             wide_text,
             analyzer,
             run_analysis_sink_data,
@@ -521,8 +520,15 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
         }
     }
 
-    fn text(&self) -> &str {
+    fn text(&self) -> &String {
         &self.text
+    }
+
+    fn set_text(&mut self, text: &String) {
+        self.text.clone_from(text);
+        self.wide_text.reset(text);
+        assert!(self.wide_text.len() <= u32::MAX as usize); // DirectWrite uses u32
+        assert!(text.len() <= u32::MAX as usize);
     }
 
     // TODO: should probably return an iterator so that the caller doesn't have to allocate
@@ -716,6 +722,8 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
 
             TextAnalyzerGlyphRun {
                 run,
+                text_range,
+                font: font.clone(),
                 cluster_map: utf8_cluster_map,
                 glyphs,
                 glyph_advances,

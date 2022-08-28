@@ -6,7 +6,8 @@ use zaffre::text::TextAnalyzer;
 extern crate zaffre;
 
 fn print_analysis(string: &str, font: &Font) {
-    let analyzer = TextAnalyzer::new(string.to_owned());
+    let mut analyzer = TextAnalyzer::new();
+    analyzer.set_text_from(&string.to_owned());
     println!("{}", analyzer.text());
     for r in analyzer.get_runs() {
        let glyph_run = analyzer.get_glyphs_and_positions(r.text_range(), r.clone(), &font);

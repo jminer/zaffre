@@ -10,9 +10,18 @@ use windows::core::{IntoParam, Abi, Param, PWSTR, PCWSTR};
 //   UTF-8 string. So I don't think it is needed on macOS.
 // - The standard library's OsStr::encode_wide() function is only available on Windows.
 
-#[derive(Clone)]
 pub(crate) struct WideFfiString<A: ::smallvec::Array<Item=u16>> {
     buffer: SmallVec<A>,
+}
+
+impl<A: ::smallvec::Array<Item=u16>> Clone for WideFfiString<A> {
+    fn clone(&self) -> Self {
+        Self { buffer: self.buffer.clone() }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.buffer.clone_from(&source.buffer)
+    }
 }
 
 impl<A: ::smallvec::Array<Item=u16>> WideFfiString<A> {
@@ -31,10 +40,17 @@ impl<A: ::smallvec::Array<Item=u16>> WideFfiString<A> {
 
 impl<A: ::smallvec::Array<Item=u16>> WideFfiString<A> {
     pub(crate) fn new(s: &str) -> Self {
-        let mut buffer = SmallVec::<A>::new();
-        buffer.extend(OsStr::new(s).encode_wide().map(|c| if c == 0 { b'?' as u16 } else { c }));
-        buffer.push(0);
-        Self { buffer }
+        let mut new_self = Self { buffer: SmallVec::<A>::new() };
+        new_self.reset(s);
+        new_self
+    }
+
+    pub(crate) fn reset(&mut self, s: &str) {
+        self.buffer.clear();
+        self.buffer.extend(
+            OsStr::new(s).encode_wide().map(|c| if c == 0 { b'?' as u16 } else { c })
+        );
+        self.buffer.push(0);
     }
 }
 

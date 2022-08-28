@@ -5,7 +5,8 @@ use zaffre::text::TextAnalyzer;
 extern crate zaffre;
 
 fn print_analysis(string: &str) {
-    let analyzer = TextAnalyzer::new(string.to_owned());
+    let mut analyzer = TextAnalyzer::new();
+    analyzer.set_text_from(&string.to_owned());
     println!("{}", analyzer.text());
     for r in analyzer.get_runs() {
         println!("{:#?}", r);

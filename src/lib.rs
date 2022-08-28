@@ -73,7 +73,7 @@ pub use vk_util::VulkanGlobals;
 pub mod text {
     pub use crate::formatted_string::{Format, LineStyle, FormattedString, SmallType};
     pub use crate::text_analyzer::{TextAnalyzer, TextAnalyzerRun, TextAnalyzerGlyphRun};
-    pub use crate::text_layout::TextLayout;
+    pub use crate::text_layout::{TextLayout, TextFramer, TextRectFramer};
 }
 
 use nalgebra::{BaseFloat, Cast};
