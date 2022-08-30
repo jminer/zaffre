@@ -60,6 +60,8 @@ pub trait GenericFontBackend: Debug + Clone {
 
     fn description(&self) -> FontDescription;
 
+    fn get_glyph(&self, c: char) -> u16;
+
     fn draw_glyphs(
         &self,
         glyphs: &[u16],

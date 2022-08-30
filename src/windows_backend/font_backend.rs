@@ -312,6 +312,15 @@ impl GenericFontBackend for FontBackend {
         }
     }
 
+    fn get_glyph(&self, c: char) -> u16 {
+        unsafe {
+            let mut glyph: u16 = 0;
+            self.font_face.GetGlyphIndices(&(c as u32), 1, &mut glyph)
+                .expect("GetGlyphIndices() failed");
+            glyph
+        }
+    }
+
     fn draw_glyphs(
         &self,
         glyphs: &[u16],

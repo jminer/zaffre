@@ -202,6 +202,12 @@ impl Font {
         self.backend.description()
     }
 
+    // This function is mainly for debugging and testing purposes. For proper text rendering, you
+    // need to use a shaping engine to generate the glyphs for a string.
+    pub fn get_glyph(&self, c: char) -> u16 {
+        self.backend.get_glyph(c)
+    }
+
     pub fn draw_glyphs(
         &self,
         glyphs: &[u16],
