@@ -230,6 +230,24 @@ impl Font {
     //pub fn get_glyph_bounding_rects(&self, glyphs: &[u16]) -> Vec<Rect<f32>>;
 }
 
+#[test]
+fn test_draw_glyph() {
+    let font_family = get_family("Italianno").unwrap();
+    let font = font_family.get_styles()[0].get_font(20.0);
+
+    // I think these should be close enough to match on different platforms. It's the same font
+    // file, after all.
+    let glyph = font.get_glyph('g');
+    let glyph_images = font.draw_glyphs(&[glyph], &[Point2::new(0.0, 0.0)], Affine2::IDENTITY);
+    assert_eq!(glyph_images[0].bounding_size, Size2::new(13, 13));
+    assert_eq!(glyph_images[0].baseline_origin, Point2::new(6.0, 6.0));
+
+    let glyph = font.get_glyph('M');
+    let glyph_images = font.draw_glyphs(&[glyph], &[Point2::new(0.0, 0.0)], Affine2::IDENTITY);
+    assert_eq!(glyph_images[0].bounding_size, Size2::new(21, 13));
+    assert_eq!(glyph_images[0].baseline_origin, Point2::new(0.0, 12.0));
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FontAntialiasing {
     None,
