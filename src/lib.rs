@@ -7,6 +7,7 @@
 extern crate test;
 
 extern crate ahash;
+extern crate approx;
 #[macro_use]
 extern crate ash;
 extern crate glam;

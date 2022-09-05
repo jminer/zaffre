@@ -10,7 +10,7 @@ use crate::backend::text_analyzer_backend::{TextAnalyzerRunBackend, TextAnalyzer
 use crate::text::FormattedString;
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextDirection {
     LeftToRight,
     RightToLeft,
@@ -124,5 +124,71 @@ impl TextAnalyzer {
         debug_assert!(run.text_range().contains(&text_range.start));
         debug_assert!(run.text_range().contains(&(text_range.end - 1)));
         self.backend.get_glyphs_and_positions(text_range, run, font)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use approx::assert_abs_diff_eq;
+
+    use crate::font;
+    use crate::text_analyzer::{TextAnalyzer, TextDirection};
+
+    #[test]
+    fn basic_english_glyph_run() {
+        let font_family = font::get_family("DejaVu Sans")
+            .expect("couldn't find font");
+        let font = font_family.get_styles()[0].get_font(20.0);
+
+        let mut analyzer = TextAnalyzer::new();
+        analyzer.set_text_from(&"Apple".to_owned());
+        let runs = analyzer.get_runs();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].direction, TextDirection::LeftToRight);
+        let glyph_run =
+            analyzer.get_glyphs_and_positions(runs[0].text_range(), runs[0].clone(), &font);
+
+        assert_eq!(&glyph_run.cluster_map[..], &[0, 1, 2, 3, 4]);
+
+        assert_eq!(&glyph_run.glyphs[..], &[
+            font.get_glyph('A'),
+            font.get_glyph('p'),
+            font.get_glyph('p'),
+            font.get_glyph('l'),
+            font.get_glyph('e'),
+        ]);
+
+        // These are the widths returned from the DirectWrite backend.
+        assert_abs_diff_eq!(&glyph_run.glyph_advances[0], &13.68, epsilon = 0.5);
+        assert_abs_diff_eq!(&glyph_run.glyph_advances[3], &5.56, epsilon = 0.5);
+    }
+
+    #[test]
+    fn basic_hebrew_glyph_run() {
+        let font_family = font::get_family("DejaVu Sans")
+            .expect("couldn't find font");
+        let font = font_family.get_styles()[0].get_font(20.0);
+
+        let mut analyzer = TextAnalyzer::new();
+        analyzer.set_text_from(&"עברית".to_owned());
+        let runs = analyzer.get_runs();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].direction, TextDirection::RightToLeft);
+        let glyph_run =
+            analyzer.get_glyphs_and_positions(runs[0].text_range(), runs[0].clone(), &font);
+
+        assert_eq!(&glyph_run.cluster_map[..], &[0, 0, 1, 1, 2, 2, 3, 3, 4, 4]);
+
+        assert_eq!(&glyph_run.glyphs[..], &[
+            font.get_glyph('ע'),
+            font.get_glyph('ב'),
+            font.get_glyph('ר'),
+            font.get_glyph('י'),
+            font.get_glyph('ת'),
+        ]);
+
+        // These are the widths returned from the DirectWrite backend.
+        assert_abs_diff_eq!(&glyph_run.glyph_advances[0], &12.52, epsilon = 0.5);
+        assert_abs_diff_eq!(&glyph_run.glyph_advances[3], &4.47, epsilon = 0.5);
     }
 }

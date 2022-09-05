@@ -9,6 +9,7 @@ license = "MPL-2.0"
 
 [dependencies]
 ahash = "0.2"
+approx = "0.5.1"
 ash = "0.28"
 #float-cmp = "0.5"
 glam = "0.21.2"
