@@ -141,3 +141,45 @@ I didn't know font-kit existed when I started on the font support. I mainly hear
 - The backends aren't as abstracted away as I'd like. It would be easier if there is a cross-platform API where people don't have to know what backend is being used.
 - To open a font (like with DirectWrite), font-kit gets the path to the file from DirectWrite, reads in the file's data, then creates a DirectWrite font object using the in-memory font data. It also keeps a copy of the font data in a Rust `Vec`. I think this is needlessly inefficient. It completely bypasses whatever font caching DirectWrite does.
 - To rasterize a glyph, the API requires two copies of the image. In the DirectWrite backend, it allocates an alpha texture inside `rasterize_glyph`, then copies it to the `Canvas`. Then the image would have to be copied out of the `Canvas` to a font atlas or the display image. With DirectWrite's API, I think it's impossible to avoid one copy of the image data, but two is unnecessary.
+
+## macOS APIs
+
+CTRunGetGlyphs
+CTRunGetPositions
+CTFontGetBoundingRectsForGlyphs
+CGContextSetTextPosition
+CGContextShowGlyphsAtPositions
+CFAttributedString
+NSAttributedString lineBreak(before:within:)
+https://developer.apple.com/documentation/foundation/nsattributedstring/1526887-linebreak
+NSAttributedString lineBreakByHyphenating(before:within:)
+NSAttributedString nextWordFromIndex:forward:
+CTLineGetStringIndexForPosition
+CTLineGetOffsetForStringIndex
+CTLineEnumerateCaretOffsets (get glyph clusters?)
+
+macOS calls font fallback a "cascade list":
+CTFontCopyDefaultCascadeListForLanguages
+
+CTFontGetLigatureCaretPositions
+
+I think it's really stupid that CFAttributedString doesn't link to the list of constants you can use with it. But here's the list:
+
+https://developer.apple.com/documentation/coretext/styling_attributed_strings/string_attribute_name_constants?language=objc
+
+CTFontManagerCreateFontDescriptorsFromURL
+
+## DirectWrite
+
+Windows 8.1 and newer have IDWriteFontFallback::MapCharacters(). And I have some D code for font fallback on Windows 7.
+
+Windows 8 and 7 with update has IDWriteFont1::IsMonospacedFont()
+I could probably do
+if(queryInterface<IDWriteFont1>(font))
+    font.IsMonospacedFont()
+else {
+    IDWriteGdiInterop::ConvertFontToLOGFONT(font, &logfont)
+    (logfont.lfPitchAndFamily & 0x3) == FIXED_PITCH
+}
+
+TODO: need to provide a way for an app to read the Vulkan pipeline cache to save it to disk
