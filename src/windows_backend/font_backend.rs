@@ -502,7 +502,7 @@ impl GenericFontBackend for FontBackend {
             glyph_run_analysis.CreateAlphaTexture(
                 texture_type, &bounds, data_ptr, data.capacity() as u32
             ).expect("CreateAlphaTexture() failed");
-            dbg!(&data);
+            //dbg!(&data);
 
             // On Windows 7, convert subpixel AA to grayscale if needed.
             if antialiasing == FontAntialiasing::Grayscale &&
