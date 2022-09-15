@@ -15,8 +15,10 @@ macOS as well. The GPU rendered backend is not usable.
 
 ## Testing Fonts
 
-There are two fonts that tests rely on: DejaVu Sans and Italianno. DejaVu Sans is a standard font
-with good language support that isn't shipped with Windows or Mac. (Some of the fonts that ship with
-Windows have hacks in them that could cause the metrics to vary if they were used on Linux; they
-aren't suitable for use with tests.) Italianno has metrics and overlaps that most fonts don't. And
-both are freely available.
+There are three fonts that tests rely on:
+
+- DejaVu Sans - a nice sans serif font with good language support
+- Noto Sans Devanagari - for Devanagari support
+- Italianno - has metrics and overlaps that most fonts don't
+
+I don't think it's a good idea to use any fonts shipped with Windows or Mac in case there are hacks involved with them. For example, GDI and DirectWrite have hacks for TrueType hinting of fonts of older fonts shipped with Windows (see https://github.com/servo/font-kit/wiki/FAQ).

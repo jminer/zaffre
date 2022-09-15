@@ -41,9 +41,10 @@ pub struct TextAnalyzerGlyphRun {
     // their own struct if they wanted to keep them together.
     pub text_range: Range<usize>,
     pub font: Font,
-    // Maps from characters to glyphs.
+    // Maps from characters to glyphs. The values always increase monotonically.
     pub cluster_map: SmallVec<[usize; 32]>,
-    // Glyphs in the font.
+    // Glyphs in the font. Glyphs are overall in logical order but are in visual order within a
+    // cluster.
     pub glyphs: SmallVec<[u16; 32]>,
     pub glyph_advances: SmallVec<[f32; 32]>,
     pub glyph_offsets: SmallVec<[Point2<f32>; 32]>,
@@ -169,6 +170,7 @@ mod tests {
             .expect("couldn't find font");
         let font = font_family.get_styles()[0].get_font(20.0);
 
+        // Hebrew characters are two bytes each in UTF-8.
         let mut analyzer = TextAnalyzer::new();
         analyzer.set_text_from(&"עברית".to_owned());
         let runs = analyzer.get_runs();
@@ -190,5 +192,41 @@ mod tests {
         // These are the widths returned from the DirectWrite backend.
         assert_abs_diff_eq!(&glyph_run.glyph_advances[0], &12.52, epsilon = 0.5);
         assert_abs_diff_eq!(&glyph_run.glyph_advances[3], &4.47, epsilon = 0.5);
+    }
+
+    #[test]
+    fn basic_devanagari_glyph_run() {
+        let font_family = font::get_family("Noto Sans Devanagari")
+            .expect("couldn't find font");
+        let font = font_family.get_styles()[0].get_font(20.0);
+
+        // https://en.wikipedia.org/wiki/Devanagari#Vowel_diacritics
+        //
+        // I chose kā ki for the test string. It has 4 code points, each 3 bytes. The vowel
+        // codepoints come after the consonant codepoints. They result in 4 glyphs, but not in the
+        // same order because the second vowel glyph comes before the second consonant.
+        let mut analyzer = TextAnalyzer::new();
+        analyzer.set_text_from(&"काकि".to_owned());
+        let runs = analyzer.get_runs();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].direction, TextDirection::LeftToRight);
+        let glyph_run =
+            analyzer.get_glyphs_and_positions(runs[0].text_range(), runs[0].clone(), &font);
+
+        assert_eq!(&glyph_run.cluster_map[..], &[0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2]);
+
+        // For some reason, ि doesn't result in the same glyph here even though it's the same
+        // codepoint.
+        assert_eq!(glyph_run.glyphs.len(), 4);
+        assert_eq!(glyph_run.glyphs[0], font.get_glyph('क'));
+        assert_eq!(glyph_run.glyphs[1], font.get_glyph('ा'));
+        //assert_eq!(glyph_run.glyphs[2], font.get_glyph('ि'));
+        assert_eq!(glyph_run.glyphs[3], font.get_glyph('क'));
+
+        // These are the widths returned from the DirectWrite backend.
+        assert_abs_diff_eq!(&glyph_run.glyph_advances[0], &15.24, epsilon = 0.5);
+        assert_abs_diff_eq!(&glyph_run.glyph_advances[1], &5.18, epsilon = 0.5);
+        assert_abs_diff_eq!(&glyph_run.glyph_advances[2], &5.18, epsilon = 0.5);
+        assert_abs_diff_eq!(&glyph_run.glyph_advances[3], &15.24, epsilon = 0.5);
     }
 }

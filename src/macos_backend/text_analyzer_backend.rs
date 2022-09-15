@@ -38,6 +38,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
         let runs = Vec::with_capacity(ct_runs.len() as usize);
         runs
     }
+    // TODO: need to check if the CTRun is monotonic. If it isn't, change the cluster map so it is.
 
     // To get glyphs, we have to create a new CTLine for every call (or drastically change the
     // TextAnalyzer interface).
