@@ -4,12 +4,13 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::{iter, ptr};
 
+use bit_vec::BitVec;
 use nalgebra::Point2;
 use num::Integer;
 use smallvec::SmallVec;
 use windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
 use windows::Win32::Globalization::{GetUserDefaultLocaleName, GetThreadLocale, GetLocaleInfoEx, LOCALE_SNAME, LCIDToLocaleName};
-use windows::Win32::Graphics::DirectWrite::{IDWriteTextAnalysisSink, IDWriteTextAnalysisSink_Impl, DWRITE_SCRIPT_ANALYSIS, DWRITE_LINE_BREAKPOINT, IDWriteNumberSubstitution, IDWriteTextAnalysisSource, IDWriteTextAnalysisSource_Impl, DWRITE_READING_DIRECTION_LEFT_TO_RIGHT, DWRITE_NUMBER_SUBSTITUTION_METHOD_NONE, IDWriteTextAnalyzer, DWRITE_SHAPING_TEXT_PROPERTIES, DWRITE_SHAPING_GLYPH_PROPERTIES, DWRITE_GLYPH_OFFSET};
+use windows::Win32::Graphics::DirectWrite::{IDWriteTextAnalysisSink, IDWriteTextAnalysisSink_Impl, DWRITE_SCRIPT_ANALYSIS, DWRITE_LINE_BREAKPOINT, IDWriteNumberSubstitution, IDWriteTextAnalysisSource, IDWriteTextAnalysisSource_Impl, DWRITE_READING_DIRECTION_LEFT_TO_RIGHT, DWRITE_NUMBER_SUBSTITUTION_METHOD_NONE, IDWriteTextAnalyzer, DWRITE_SHAPING_TEXT_PROPERTIES, DWRITE_SHAPING_GLYPH_PROPERTIES, DWRITE_GLYPH_OFFSET, DWRITE_BREAK_CONDITION_CAN_BREAK, DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_MUST_BREAK, DWRITE_BREAK_CONDITION, DWRITE_BREAK_CONDITION_NEUTRAL};
 use windows::Win32::System::SystemServices::LOCALE_NAME_MAX_LENGTH;
 use windows::core::{implement, PCWSTR};
 
@@ -409,12 +410,14 @@ mod tests {
 
 }
 
-#[implement(IDWriteTextAnalysisSink)]
-struct DWriteLineBreakAnalysisSink {
+struct DWriteLineBreakAnalysisSinkData {
     breakpoints: Cell<Vec<Option<DWRITE_LINE_BREAKPOINT>>>,
 }
 
-impl DWriteLineBreakAnalysisSink {
+#[implement(IDWriteTextAnalysisSink)]
+struct DWriteLineBreakAnalysisSink(Rc<DWriteLineBreakAnalysisSinkData>);
+
+impl DWriteLineBreakAnalysisSinkData {
     fn new() -> Self {
         Self {
             breakpoints: Default::default(),
@@ -445,14 +448,14 @@ impl IDWriteTextAnalysisSink_Impl for DWriteLineBreakAnalysisSink {
         text_length: u32,
         line_breakpoints: *const DWRITE_LINE_BREAKPOINT,
     ) -> windows::core::Result<()> {
-        let mut breakpoints = self.breakpoints.replace(Vec::new());
-        let text_end = (text_position + text_length) as usize;
+        let mut breakpoints = self.0.breakpoints.take();
+        let text_pos = text_position as usize;
 
-        for i in text_position as usize..text_end {
-            breakpoints[i] = Some(unsafe { line_breakpoints.add(i).read() });
+        for i in 0..text_length as usize {
+            breakpoints[text_pos + i] = Some(unsafe { line_breakpoints.add(i).read() });
         }
 
-        self.breakpoints.replace(breakpoints);
+        self.0.breakpoints.replace(breakpoints);
 
         Ok(())
     }
@@ -484,6 +487,8 @@ pub struct TextAnalyzerBackend {
     //analysis_source: DWriteAnalysisSource,
     run_analysis_sink_data: Rc<DWriteRunAnalysisSinkData>,
     run_analysis_sink: IDWriteTextAnalysisSink,
+    line_break_analysis_sink_data: Rc<DWriteLineBreakAnalysisSinkData>,
+    line_break_analysis_sink: IDWriteTextAnalysisSink,
     last_index_pair: Cell<(u32, u32)>,
 
     // I could store a Vec<(u32, u32)> mapping corresponding UTF-16 and UTF-8 indexes. It would use
@@ -491,6 +496,33 @@ pub struct TextAnalyzerBackend {
     // per code unit, which is reasonable. I would probably choose one out of every 16. Then to
     // convert an index, it would take a binary search, followed by a linear search of up to 16
     // pairs.
+}
+
+impl TextAnalyzerBackend {
+    fn create_dwrite_analysis_source(&self) -> IDWriteTextAnalysisSource {
+        unsafe {
+            // Get the thread locale every time in case it changes.
+            let mut locale_name = get_thread_locale();
+
+            let num_subst = DWRITE_FACTORY.with(|factory|
+                factory.CreateNumberSubstitution(DWRITE_NUMBER_SUBSTITUTION_METHOD_NONE,
+                    PCWSTR(locale_name.as_ptr()),
+                    true
+                ).expect("CreateNumberSubstitution() failed")
+            );
+            let analysis_source_data = Rc::new(DWriteAnalysisSourceData {
+                wide_text: self.wide_text.as_ptr() as *mut _,
+                len: self.wide_text.len() as u32,
+                locale_name,
+                num_subst,
+            });
+            let analysis_source = DWriteAnalysisSource(analysis_source_data);
+
+            let analysis_source: IDWriteTextAnalysisSource = analysis_source.into();
+
+            analysis_source
+        }
+    }
 }
 
 impl Debug for TextAnalyzerBackend {
@@ -510,12 +542,17 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
         let run_analysis_sink_data = Rc::new(DWriteRunAnalysisSinkData::new());
         let run_analysis_sink: IDWriteTextAnalysisSink =
             DWriteRunAnalysisSink(run_analysis_sink_data.clone()).into();
+        let line_break_analysis_sink_data = Rc::new(DWriteLineBreakAnalysisSinkData::new());
+        let line_break_analysis_sink: IDWriteTextAnalysisSink =
+            DWriteLineBreakAnalysisSink(line_break_analysis_sink_data.clone()).into();
         Self {
             text: String::new(),
             wide_text,
             analyzer,
             run_analysis_sink_data,
             run_analysis_sink,
+            line_break_analysis_sink_data,
+            line_break_analysis_sink,
             last_index_pair: Cell::new((0, 0)),
         }
     }
@@ -537,24 +574,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
         unsafe {
             self.run_analysis_sink_data.clear_and_resize(self.wide_text.len());
 
-            // Get the thread locale every time in case it changes.
-            let mut locale_name = get_thread_locale();
-
-            let num_subst = DWRITE_FACTORY.with(|factory|
-                factory.CreateNumberSubstitution(DWRITE_NUMBER_SUBSTITUTION_METHOD_NONE,
-                    PCWSTR(locale_name.as_ptr()),
-                    true
-                ).expect("CreateNumberSubstitution() failed")
-            );
-            let analysis_source_data = Rc::new(DWriteAnalysisSourceData {
-                wide_text: self.wide_text.as_ptr() as *mut _,
-                len: self.wide_text.len() as u32,
-                locale_name,
-                num_subst,
-            });
-            let analysis_source = DWriteAnalysisSource(analysis_source_data);
-
-            let analysis_source: IDWriteTextAnalysisSource = analysis_source.into();
+            let analysis_source = self.create_dwrite_analysis_source();
 
             self.analyzer.AnalyzeScript(
                 analysis_source.clone(),
@@ -727,6 +747,53 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
             }
         }
     }
+
+    fn get_line_breaks(&self) -> BitVec {
+        unsafe {
+            let analysis_source = self.create_dwrite_analysis_source();
+
+            self.line_break_analysis_sink_data.clear_and_resize(self.wide_text.len());
+
+            self.analyzer.AnalyzeLineBreakpoints(
+                analysis_source.clone(),
+                0, self.wide_text.len() as u32,
+                self.line_break_analysis_sink.clone()
+            ).expect("AnalyzeLineBreakpoints() failed");
+
+            fn break_condition_before(bp: DWRITE_LINE_BREAKPOINT) -> DWRITE_BREAK_CONDITION {
+                const BREAK_CONDITION_BEFORE_MASK: u8 = 0b11;
+                DWRITE_BREAK_CONDITION((bp._bitfield & BREAK_CONDITION_BEFORE_MASK) as i32)
+            }
+
+            let breakpoints = self.line_break_analysis_sink_data.breakpoints.take();
+
+            let mut line_breaks = BitVec::with_capacity(self.text.len());
+            {
+                let utf16_indexes = Utf16IndexesForUtf8 {
+                    utf8_str:  &self.text,
+                    utf16_str: self.wide_text.as_slice(),
+                    initial: true,
+                    utf8_index: 0,
+                    utf16_index: 0,
+                };
+                for wide_index in utf16_indexes {
+                    line_breaks.push(
+                        match break_condition_before(breakpoints[wide_index].unwrap()) {
+                            DWRITE_BREAK_CONDITION_CAN_BREAK |
+                            DWRITE_BREAK_CONDITION_MUST_BREAK => true,
+                            DWRITE_BREAK_CONDITION_MAY_NOT_BREAK | _ => false,
+                        }
+                    );
+                }
+            }
+
+            self.line_break_analysis_sink_data.breakpoints.replace(breakpoints);
+
+            line_breaks
+        }
+    }
+    // TODO: for word boundaries, DWrite provides no support, but maybe use
+    // Windows.Data.Text.SelectableWordsSegmenter? It mentions implementing UAX 29. Fall back to just using spaces for Windows older than 10?
 
 
 }

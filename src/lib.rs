@@ -10,6 +10,7 @@ extern crate ahash;
 extern crate approx;
 #[macro_use]
 extern crate ash;
+extern crate bit_vec;
 extern crate glam;
 #[macro_use]
 extern crate nalgebra;

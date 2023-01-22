@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::ops::Range;
 use std::rc::Rc;
 
+use bit_vec::BitVec;
 use glam::Affine2;
 use nalgebra::Point2;
 use smallvec::SmallVec;
@@ -96,6 +97,7 @@ pub trait GenericTextAnalyzerBackend: Debug {
         font: &Font,
     ) -> TextAnalyzerGlyphRun;
 
+    fn get_line_breaks(&self) -> BitVec;
 }
 
 // endregion:

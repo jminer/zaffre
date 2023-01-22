@@ -1,6 +1,7 @@
 use std::ops::Range;
 use std::rc::Rc;
 
+use bit_vec::BitVec;
 use nalgebra::Point2;
 use smallvec::SmallVec;
 
@@ -126,14 +127,50 @@ impl TextAnalyzer {
         debug_assert!(run.text_range().contains(&(text_range.end - 1)));
         self.backend.get_glyphs_and_positions(text_range, run, font)
     }
+
+    // Returns a bit vector where each bit represents whether the character index in the text is a
+    // valid line break position. For multibyte characters, every bit cooresponding to the character
+    // is the same value.
+    fn get_line_breaks(&self) -> BitVec {
+        self.backend.get_line_breaks()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use approx::assert_abs_diff_eq;
+    use bit_vec::BitVec;
 
     use crate::font;
     use crate::text_analyzer::{TextAnalyzer, TextDirection};
+
+    #[test]
+    fn basic_english_line_breaks() {
+        let mut analyzer = TextAnalyzer::new();
+        analyzer.set_text_from(&"I like peaches".to_owned());
+        let line_breaks = analyzer.get_line_breaks();
+
+        assert_eq!(line_breaks.len(), analyzer.text().len());
+
+        let mut expected_breaks = BitVec::from_elem(14, false);
+        expected_breaks.set(2, true);
+        expected_breaks.set(7, true);
+        assert_eq!(&line_breaks, &expected_breaks);
+    }
+
+    #[test]
+    fn basic_hebrew_line_breaks() {
+        let mut analyzer = TextAnalyzer::new();
+        analyzer.set_text_from(&"האב אוהב".to_owned());
+        let line_breaks = analyzer.get_line_breaks();
+
+        assert_eq!(line_breaks.len(), analyzer.text().len());
+
+        let mut expected_breaks = BitVec::from_elem(15, false);
+        expected_breaks.set(7, true);
+        expected_breaks.set(8, true);
+        assert_eq!(&line_breaks, &expected_breaks);
+    }
 
     #[test]
     fn basic_english_glyph_run() {
