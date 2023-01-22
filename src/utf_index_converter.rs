@@ -1,5 +1,9 @@
 
 
+fn is_utf8_code_point_first_byte(byte: u8) -> bool {
+    (byte >> 6) != 0b10
+}
+
 fn utf8_code_point_byte_len(first_byte: u8) -> usize {
     // I tried indexing an array instead of a match, but the match is many fewer instructions.
     match first_byte.leading_ones() {
@@ -90,9 +94,9 @@ fn utf16_to_utf8_conversion_test() {
 
     // ללשון
     // utf8: \x61\x6e\x20\xd7\x9c\xd7\x9c\xd7\xa9\xd7\x95\xd7\x9f\x21
-    let (u16_str, u8_str) = (
-        [0x61u16, 0x6E, 0x20, 0x5DC, 0x5DC, 0x5e9, 0x5D5, 0x5DF, 0x21],
-        "an ללשון!"
+    let (u8_str, u16_str) = (
+        "an ללשון!",
+        [0x61u16, 0x6E, 0x20, 0x5DC, 0x5DC, 0x5e9, 0x5D5, 0x5DF, 0x21]
     );
     let mut converter = UtfIndexConverter::new(u8_str, &u16_str);
     assert_eq!(converter.convert_to_utf8_index(0), 0);
@@ -105,9 +109,9 @@ fn utf16_to_utf8_conversion_test() {
     assert_eq!(converter.convert_to_utf8_index(8), 13);
 
     // utf8: \x68\x69\xf0\x9f\x99\x83\xf0\x9f\x92\x99\xf0\x9f\x92\x9a
-    let (u16_str, u8_str) = (
-        [0x0068, 0x0069, 0xd83d, 0xde43, 0xd83d, 0xdc99, 0xd83d, 0xdc9a],
-        "hi🙃💙💚"
+    let (u8_str, u16_str) = (
+        "hi🙃💙💚",
+        [0x0068, 0x0069, 0xd83d, 0xde43, 0xd83d, 0xdc99, 0xd83d, 0xdc9a]
     );
     let converter = UtfIndexConverter::new(u8_str, &u16_str);
     assert_eq!(converter.collect::<Vec<_>>(), &[
@@ -125,9 +129,9 @@ fn utf8_to_utf16_conversion_test() {
     // https://convertcodes.com/utf16-encode-decode-convert-string/
 
     // utf8: \x68\x69\xf0\x9f\x99\x83\xf0\x9f\x92\x99\xf0\x9f\x92\x9a
-    let (u16_str, u8_str) = (
-        [0x0068, 0x0069, 0xd83d, 0xde43, 0xd83d, 0xdc99, 0xd83d, 0xdc9a],
-        "hi🙃💙💚"
+    let (u8_str, u16_str) = (
+        "hi🙃💙💚",
+        [0x0068, 0x0069, 0xd83d, 0xde43, 0xd83d, 0xdc99, 0xd83d, 0xdc9a]
     );
     let converter = UtfIndexConverter::new(u8_str, &u16_str);
     assert_eq!(converter.collect::<Vec<_>>(), &[
@@ -140,3 +144,79 @@ fn utf8_to_utf16_conversion_test() {
     assert_eq!(converter.convert_to_utf16_index(14), 8);
 }
 
+pub(crate) struct Utf16IndexesForUtf8<'a, 'b> {
+    pub(crate) utf8_str: &'b str,
+    pub(crate) utf16_str: &'a [u16],
+    pub(crate) initial: bool,
+    pub(crate) utf8_index: usize,
+    pub(crate) utf16_index: usize,
+}
+
+impl<'a, 'b> Utf16IndexesForUtf8<'a, 'b> {
+    pub(crate) fn new(
+        utf8_str: &'b str,
+        utf16_str: &'a [u16],
+    ) -> Self {
+        Self {
+            utf8_str,
+            utf16_str,
+            initial: true,
+            utf8_index: 0,
+            utf16_index: 0,
+        }
+    }
+}
+
+impl<'a, 'b> Iterator for Utf16IndexesForUtf8<'a, 'b> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.utf8_index + 1 >= self.utf8_str.len() {
+            debug_assert!(self.utf8_index + 1 == self.utf8_str.len());
+            return None;
+        }
+        if !self.initial {
+            self.utf8_index += 1;
+            if is_utf8_code_point_first_byte(self.utf8_str.as_bytes()[self.utf8_index]) {
+                self.utf16_index += if self.utf16_str[self.utf16_index].is_utf16_surrogate() {
+                    2
+                } else {
+                    1
+                };
+            }
+        }
+        self.initial = false;
+
+        Some(self.utf16_index)
+    }
+}
+
+#[test]
+fn utf16_index_for_utf8_test() {
+    // https://convertcodes.com/utf16-encode-decode-convert-string/
+
+    // utf8: \x68\x69\x20\xd7\x90\xd7\x91\xd7\x90
+    let (u8_str, u16_str) = (
+        "hi אבא",
+        [0x0068, 0x0069, 0x0020, 0x05d0, 0x05d1, 0x05d0]
+    );
+    let converter = Utf16IndexesForUtf8::new(u8_str, &u16_str);
+    assert_eq!(converter.collect::<Vec<_>>(), &[
+        0, 1, 2, 3, 3, 4, 4, 5, 5
+    ]);
+}
+
+#[test]
+fn utf16_index_for_utf8_test_with_emoji() {
+    // https://convertcodes.com/utf16-encode-decode-convert-string/
+
+    // utf8: \x68\x69\xf0\x9f\x99\x83\xf0\x9f\x92\x99\xf0\x9f\x92\x9a
+    let (u8_str, u16_str) = (
+        "hi🙃💙💚",
+        [0x0068, 0x0069, 0xd83d, 0xde43, 0xd83d, 0xdc99, 0xd83d, 0xdc9a]
+    );
+    let converter = Utf16IndexesForUtf8::new(u8_str, &u16_str);
+    assert_eq!(converter.collect::<Vec<_>>(), &[
+        0, 1, 2, 2, 2, 2, 4, 4, 4, 4, 6, 6, 6, 6
+    ]);
+}
