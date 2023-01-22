@@ -711,7 +711,7 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
                 for i in text_range.clone() {
                     if i == next_index_pair.0 {
                         wide_index = next_index_pair.1;
-                        // The unwrap() can't happend because the converter returns the end index,
+                        // The unwrap() can't happen because the converter returns the end index,
                         // and the loop doesn't loop to it.
                         next_index_pair = converter.next().unwrap();
                     }
