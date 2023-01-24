@@ -719,8 +719,8 @@ impl GenericTextAnalyzerBackend for TextAnalyzerBackend {
             let mut utf8_cluster_map = SmallVec::<[usize; 32]>::with_capacity(self.text.len());
             {
                 let utf16_indexes = Utf16IndexesForUtf8 {
-                    utf8_str:  &self.text,
-                    utf16_str: self.wide_text.as_slice(),
+                    utf8_str:  &self.text[..text_range.end],
+                    utf16_str: &self.wide_text.as_slice()[..wtext_end],
                     initial: true,
                     utf8_index: text_range.start,
                     utf16_index: wtext_start,

@@ -266,4 +266,40 @@ mod tests {
         assert_abs_diff_eq!(&glyph_run.glyph_advances[2], &5.18, epsilon = 0.5);
         assert_abs_diff_eq!(&glyph_run.glyph_advances[3], &15.24, epsilon = 0.5);
     }
+
+    #[test]
+    fn basic_multiple_glyph_runs() {
+        let font_family = font::get_family("DejaVu Sans")
+            .expect("couldn't find font");
+        let font = font_family.get_styles()[0].get_font(20.0);
+
+        let mut analyzer = TextAnalyzer::new();
+        analyzer.set_text_from(&"добрий день".to_owned());
+        let runs = analyzer.get_runs();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].direction, TextDirection::LeftToRight);
+        let glyph_run0 =
+            analyzer.get_glyphs_and_positions(0..13, runs[0].clone(), &font);
+        let glyph_run1 =
+            analyzer.get_glyphs_and_positions(13..21, runs[0].clone(), &font);
+
+        assert_eq!(&glyph_run0.cluster_map[..], &[0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6]);
+        assert_eq!(&glyph_run1.cluster_map[..], &[0, 0, 1, 1, 2, 2, 3, 3]);
+
+        assert_eq!(&glyph_run0.glyphs[..], &[
+            font.get_glyph('д'),
+            font.get_glyph('о'),
+            font.get_glyph('б'),
+            font.get_glyph('р'),
+            font.get_glyph('и'),
+            font.get_glyph('й'),
+            font.get_glyph(' '),
+        ]);
+        assert_eq!(&glyph_run1.glyphs[..], &[
+            font.get_glyph('д'),
+            font.get_glyph('е'),
+            font.get_glyph('н'),
+            font.get_glyph('ь'),
+        ]);
+    }
 }
