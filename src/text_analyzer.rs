@@ -131,7 +131,7 @@ impl TextAnalyzer {
     // Returns a bit vector where each bit represents whether the character index in the text is a
     // valid line break position. For multibyte characters, every bit cooresponding to the character
     // is the same value.
-    fn get_line_breaks(&self) -> BitVec {
+    pub fn get_line_breaks(&self) -> BitVec {
         self.backend.get_line_breaks()
     }
 }
