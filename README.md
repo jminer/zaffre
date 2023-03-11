@@ -20,5 +20,6 @@ There are three fonts that tests rely on:
 - DejaVu Sans - a nice sans serif font with good language support
 - Noto Sans Devanagari - for Devanagari support
 - Italianno - has metrics and overlaps that most fonts don't
+- DejaVu Math TeX Gyre - has non-zero leading and comes with DejaVu Sans
 
 I don't think it's a good idea to use any fonts shipped with Windows or Mac in case there are hacks involved with them. For example, GDI and DirectWrite have hacks for TrueType hinting of fonts of older fonts shipped with Windows (see https://github.com/servo/font-kit/wiki/FAQ).

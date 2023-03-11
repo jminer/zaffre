@@ -8,7 +8,7 @@ use glam::Affine2;
 use nalgebra::Point2;
 use smallvec::SmallVec;
 
-use crate::font::{OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, FontFamily, Font, FontDescription, GlyphImage};
+use crate::font::{OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, FontFamily, Font, FontDescription, GlyphImage, FontMetrics};
 use crate::text::FormattedString;
 use crate::text_analyzer::{TextAnalyzerRun, TextAnalyzer, TextAnalyzerGlyphRun};
 
@@ -60,6 +60,10 @@ pub trait GenericFontBackend: Debug + Clone {
     fn size(&self) -> f32;
 
     fn description(&self) -> FontDescription;
+
+    fn metrics(&self) -> FontMetrics;
+
+    fn slant_angle(&self) -> f32;
 
     fn get_glyph(&self, c: char) -> u16;
 

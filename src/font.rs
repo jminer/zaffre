@@ -1,3 +1,4 @@
+use approx::assert_abs_diff_eq;
 use glam::Affine2;
 use nalgebra::Point2;
 use smallvec::SmallVec;
@@ -88,6 +89,24 @@ impl From<FontWidth> for OpenTypeFontWidth {
     fn from(width: FontWidth) -> Self {
         Self(width as u32)
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FontMetrics {
+    pub ascent: f32,
+    pub descent: f32,
+    // DirectWrite has `lineGap`
+    // Core Text has `leading`
+    // Skia has `leading`
+    // Pango has `height`
+    // TODO: would line_gap be better?
+    pub leading: f32,
+    pub x_height: f32,
+    pub cap_height: f32,
+    pub underline_position: f32,
+    pub underline_thickness: f32,
+    pub strikethrough_position: f32,
+    pub strikethrough_thickness: f32,
 }
 
 // Implementation notes: Qt has a QFont and QRawFont, and I think a QFont isn't really like anything
@@ -202,6 +221,14 @@ impl Font {
         self.backend.description()
     }
 
+    pub fn metrics(&self) -> FontMetrics {
+        self.backend.metrics()
+    }
+
+    pub fn slant_angle(&self) -> f32 {
+        self.backend.slant_angle()
+    }
+
     // This function is mainly for debugging and testing purposes. For proper text rendering, you
     // need to use a shaping engine to generate the glyphs for a string.
     pub fn get_glyph(&self, c: char) -> u16 {
@@ -246,6 +273,50 @@ fn test_draw_glyph() {
     let glyph_images = font.draw_glyphs(&[glyph], &[Point2::new(0.0, 0.0)], Affine2::IDENTITY);
     assert_eq!(glyph_images[0].bounding_size, Size2::new(21, 13));
     assert_eq!(glyph_images[0].baseline_origin, Point2::new(0.0, 12.0));
+}
+
+#[test]
+fn test_font_metrics_dejavu_sans() {
+    let font_family = get_family("DejaVu Sans")
+        .expect("couldn't find font");
+    let font = font_family.get_styles()[0].get_font(20.0);
+
+    let metrics = font.metrics();
+    // These are the widths returned from the DirectWrite backend.
+    assert_abs_diff_eq!(metrics.ascent, &18.56, epsilon = 0.5);
+    assert_abs_diff_eq!(metrics.descent, &4.72, epsilon = 0.5);
+    assert_abs_diff_eq!(metrics.leading, &0.0, epsilon = 0.5);
+    assert_abs_diff_eq!(metrics.x_height, &10.93, epsilon = 0.5);
+    assert_abs_diff_eq!(metrics.cap_height, &14.58, epsilon = 0.5);
+}
+
+#[test]
+fn test_font_metrics_italianno() {
+    let font_family = get_family("Italianno")
+        .expect("couldn't find font");
+    let font = font_family.get_styles()[0].get_font(20.0);
+
+    let metrics = font.metrics();
+    // These are the widths returned from the DirectWrite backend.
+    assert_abs_diff_eq!(metrics.ascent, &16.0, epsilon = 0.5);
+    assert_abs_diff_eq!(metrics.descent, &9.0, epsilon = 0.5);
+    assert_abs_diff_eq!(metrics.leading, &0.0, epsilon = 0.5);
+    assert_abs_diff_eq!(metrics.x_height, &5.46, epsilon = 0.5);
+    assert_abs_diff_eq!(metrics.cap_height, &11.54, epsilon = 0.5);
+}
+
+#[test]
+fn test_font_metrics_dejavu_math_tex_gyre() {
+    // Not many fonts have any leading (most are 0.0), but this font does.
+    let font_family = get_family("DejaVu Math TeX Gyre")
+        .expect("couldn't find font");
+    let font = font_family.get_styles()[0].get_font(20.0);
+
+    let metrics = font.metrics();
+    // These are the widths returned from the DirectWrite backend.
+    assert_abs_diff_eq!(metrics.ascent, &15.84, epsilon = 0.5);
+    assert_abs_diff_eq!(metrics.descent, &4.16, epsilon = 0.5);
+    assert_abs_diff_eq!(metrics.leading, &4.0, epsilon = 0.5);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

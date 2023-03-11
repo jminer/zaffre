@@ -12,11 +12,11 @@ use windows::Win32::Foundation::{BOOL, RECT};
 use windows::Win32::Graphics::Gdi::{LOGFONTW, FIXED_PITCH};
 use windows::core::Interface;
 use windows::Win32::Graphics::DirectWrite::{
-    DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection, DWRITE_FACTORY_TYPE_SHARED, IDWriteFontFamily, IDWriteFont, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STYLE_OBLIQUE, IDWriteFontFace, IDWriteFont1, IDWriteFont2, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_NORMAL, IDWriteLocalizedStrings, DWRITE_FONT_STYLE, DWRITE_FONT_WEIGHT, DWRITE_FONT_STRETCH, DWRITE_GLYPH_OFFSET, DWRITE_GLYPH_RUN, DWRITE_MEASURING_MODE_NATURAL, DWRITE_RENDERING_MODE_NATURAL, DWRITE_TEXTURE_CLEARTYPE_3x1, DWRITE_MATRIX, DWRITE_GLYPH_METRICS, DWRITE_TEXTURE_ALIASED_1x1, IDWriteFactory2, DWRITE_GRID_FIT_MODE_DISABLED, DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE, DWRITE_TEXT_ANTIALIAS_MODE_CLEARTYPE, DWRITE_RENDERING_MODE_ALIASED,
+    DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection, DWRITE_FACTORY_TYPE_SHARED, IDWriteFontFamily, IDWriteFont, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STYLE_OBLIQUE, IDWriteFontFace, IDWriteFont1, IDWriteFont2, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_NORMAL, IDWriteLocalizedStrings, DWRITE_FONT_STYLE, DWRITE_FONT_WEIGHT, DWRITE_FONT_STRETCH, DWRITE_GLYPH_OFFSET, DWRITE_GLYPH_RUN, DWRITE_MEASURING_MODE_NATURAL, DWRITE_RENDERING_MODE_NATURAL, DWRITE_TEXTURE_CLEARTYPE_3x1, DWRITE_MATRIX, DWRITE_GLYPH_METRICS, DWRITE_TEXTURE_ALIASED_1x1, IDWriteFactory2, DWRITE_GRID_FIT_MODE_DISABLED, DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE, DWRITE_TEXT_ANTIALIAS_MODE_CLEARTYPE, DWRITE_RENDERING_MODE_ALIASED, DWRITE_FONT_METRICS,
 };
 
 use crate::{Size2, Rect};
-use crate::font::{FontFamily, OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, Font, FontDescription, GlyphImage, GlyphImageFormat, FontAntialiasing};
+use crate::font::{FontFamily, OpenTypeFontWeight, FontSlant, OpenTypeFontWidth, Font, FontDescription, GlyphImage, GlyphImageFormat, FontAntialiasing, FontMetrics};
 use crate::generic_backend::{GenericFontFamilyBackend, GenericFontDescriptionBackend, GenericFontFunctionsBackend, GenericFontBackend, GenericGlyphImageBackend};
 
 use super::wide_ffi_string::WideFfiString;
@@ -310,6 +310,33 @@ impl GenericFontBackend for FontBackend {
                 }
             }
         }
+    }
+
+    fn metrics(&self) -> FontMetrics {
+        unsafe {
+            let mut dwrite_metrics = Default::default();
+            self.font_face.GetMetrics(&mut dwrite_metrics);
+            let u_design_units_to_px = |x: u16|
+                x as f32 / dwrite_metrics.designUnitsPerEm as f32 * self.size();
+            let i_design_units_to_px = |x: i16|
+                x as f32 / dwrite_metrics.designUnitsPerEm as f32 * self.size();
+            FontMetrics {
+                ascent: u_design_units_to_px(dwrite_metrics.ascent),
+                descent: u_design_units_to_px(dwrite_metrics.descent),
+                leading: i_design_units_to_px(dwrite_metrics.lineGap),
+                x_height: u_design_units_to_px(dwrite_metrics.xHeight),
+                cap_height: u_design_units_to_px(dwrite_metrics.capHeight),
+                underline_position: i_design_units_to_px(dwrite_metrics.underlinePosition),
+                underline_thickness: u_design_units_to_px(dwrite_metrics.underlineThickness),
+                strikethrough_position: i_design_units_to_px(dwrite_metrics.strikethroughPosition),
+                strikethrough_thickness:
+                    u_design_units_to_px(dwrite_metrics.strikethroughThickness),
+            }
+        }
+    }
+
+    fn slant_angle(&self) -> f32 {
+        todo!()
     }
 
     fn get_glyph(&self, c: char) -> u16 {
