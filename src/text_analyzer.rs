@@ -45,7 +45,7 @@ pub struct TextAnalyzerGlyphRun {
     // Maps from characters to glyphs. The values always increase monotonically.
     pub cluster_map: SmallVec<[usize; 32]>,
     // Glyphs in the font. Glyphs are overall in logical order but are in visual order within a
-    // cluster.
+    // cluster. (Having glyphs in logical order overall makes laying out text noticably simpler.)
     pub glyphs: SmallVec<[u16; 32]>,
     pub glyph_advances: SmallVec<[f32; 32]>,
     pub glyph_offsets: SmallVec<[Point2<f32>; 32]>,
@@ -302,4 +302,37 @@ mod tests {
             font.get_glyph('ь'),
         ]);
     }
+
+    #[test]
+    fn ukrainian_hebrew_glyph_run() {
+        let font_family = font::get_family("DejaVu Sans")
+            .expect("couldn't find font");
+        let font = font_family.get_styles()[0].get_font(20.0);
+
+        // Hebrew characters are two bytes each in UTF-8.
+        let mut analyzer = TextAnalyzer::new();
+        analyzer.set_text_from(&"Ейאבא".to_owned());
+        let runs = analyzer.get_runs();
+        assert_eq!(runs.len(), 2);
+        assert_eq!(runs[0].direction, TextDirection::LeftToRight);
+        assert_eq!(runs[1].direction, TextDirection::RightToLeft);
+        let glyph_run0 =
+            analyzer.get_glyphs_and_positions(runs[0].text_range(), runs[0].clone(), &font);
+        let glyph_run1 =
+            analyzer.get_glyphs_and_positions(runs[1].text_range(), runs[1].clone(), &font);
+
+        assert_eq!(&glyph_run0.cluster_map[..], &[0, 0, 1, 1]);
+        assert_eq!(&glyph_run1.cluster_map[..], &[0, 0, 1, 1, 2, 2]);
+
+        assert_eq!(&glyph_run0.glyphs[..], &[
+            font.get_glyph('Е'),
+            font.get_glyph('й'),
+        ]);
+        assert_eq!(&glyph_run1.glyphs[..], &[
+            font.get_glyph('א'),
+            font.get_glyph('ב'),
+            font.get_glyph('א'),
+        ]);
+    }
+
 }
