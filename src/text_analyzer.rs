@@ -52,7 +52,10 @@ pub struct TextAnalyzerGlyphRun {
 }
 
 impl TextAnalyzerGlyphRun {
-    pub fn split_off(&mut self, text_index: usize) -> Self {
+    // Splits the glyph run in two at the specified index relative to the beginning of the text in
+    // the run. After the call, this run's range will be for the text before `split_index` and the
+    // returned run's range will be for the text after `split_index`.
+    pub fn split_off(&mut self, split_index: usize) -> Self {
         fn smallvec_split_off<A: smallvec::Array>(v: &mut SmallVec<A>, index: usize) -> SmallVec<A>
         where
             A::Item: Copy,
@@ -62,15 +65,18 @@ impl TextAnalyzerGlyphRun {
             new_vec
         }
 
-        let mut new_cluster_map = smallvec_split_off(&mut self.cluster_map, text_index);
+        debug_assert!(split_index < self.text_range.end - self.text_range.start);
+
+        let mut new_cluster_map = smallvec_split_off(&mut self.cluster_map, split_index);
         let glyph_split_index = *new_cluster_map.first()
             .expect("can't split off an empty glyph run");
         for i in &mut new_cluster_map {
             *i -= glyph_split_index;
         }
 
-        let new_text_range = text_index..self.text_range.end;
-        self.text_range = 0..text_index;
+        let abs_split_index = self.text_range.start + split_index;
+        let new_text_range = abs_split_index..self.text_range.end;
+        self.text_range.end = abs_split_index;
 
         Self {
             run: self.run.clone(),
@@ -335,4 +341,44 @@ mod tests {
         ]);
     }
 
+
+    #[test]
+    fn glyph_run_split() {
+        let font_family = font::get_family("DejaVu Sans")
+            .expect("couldn't find font");
+        let font = font_family.get_styles()[0].get_font(20.0);
+
+        // Hebrew characters are two bytes each in UTF-8.
+        let mut analyzer = TextAnalyzer::new();
+        analyzer.set_text_from(&"Ейאבא".to_owned());
+        let runs = analyzer.get_runs();
+        assert_eq!(runs.len(), 2);
+        let glyph_run0 =
+            analyzer.get_glyphs_and_positions(runs[0].text_range(), runs[0].clone(), &font);
+        let mut glyph_run1 =
+            analyzer.get_glyphs_and_positions(runs[1].text_range(), runs[1].clone(), &font);
+
+        assert_eq!(&glyph_run0.cluster_map[..], &[0, 0, 1, 1]);
+        assert_eq!(&glyph_run1.cluster_map[..], &[0, 0, 1, 1, 2, 2]);
+
+        assert_eq!(glyph_run0.text_range, 0..4);
+        assert_eq!(glyph_run1.text_range, 4..10);
+
+
+        let glyph_run2 = glyph_run1.split_off(4);
+        assert_eq!(&glyph_run1.cluster_map[..], &[0, 0, 1, 1]);
+        assert_eq!(&glyph_run2.cluster_map[..], &[0, 0]);
+
+        assert_eq!(glyph_run1.glyphs.len(), 2);
+        assert_eq!(glyph_run1.glyph_advances.len(), 2);
+        assert_eq!(glyph_run1.glyph_offsets.len(), 2);
+
+        assert_eq!(glyph_run2.glyphs.len(), 1);
+        assert_eq!(glyph_run2.glyph_advances.len(), 1);
+        assert_eq!(glyph_run2.glyph_offsets.len(), 1);
+
+        assert_eq!(glyph_run1.text_range, 4..8);
+        assert_eq!(glyph_run2.text_range, 8..10);
+
+    }
 }
