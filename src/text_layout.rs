@@ -420,16 +420,12 @@ impl TextLayout {
                 }
                 total_glyph_width += glyph_width;
 
-                if pos.is_cluster_start &&
-                    line_breaks[glyph_runs[pos.run_index].text_range.start + pos.text_index]
-                {
-                    line_break_pos = pos;
-                    line_break_total_glyph_width = total_glyph_width;
-                    found_line_break = true;
-                }
+                let is_line_break = pos.is_cluster_start &&
+                    line_breaks[glyph_runs[pos.run_index].text_range.start + pos.text_index];
+                found_line_break |= is_line_break;
                 // If there isn't enough room to get to the first line break position, just put as
                 // many characters as possible in the line rect.
-                if !found_line_break {
+                if !found_line_break || is_line_break {
                     line_break_pos = pos;
                     line_break_total_glyph_width = total_glyph_width;
                 }
