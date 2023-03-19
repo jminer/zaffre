@@ -109,6 +109,12 @@ pub struct FontMetrics {
     pub strikethrough_thickness: f32,
 }
 
+impl FontMetrics {
+    pub fn height(&self) -> f32 {
+        self.ascent + self.descent + self.leading
+    }
+}
+
 // Implementation notes: Qt has a QFont and QRawFont, and I think a QFont isn't really like anything
 // in Skia or DirectWrite. A QFont can be created with a family name that doesn't exist, but the
 // other libraries make you query and only create an object if you get a match. DirectWrite and Core
