@@ -244,7 +244,6 @@ mod glyph_iter_tests {
 struct LineMeasurement {
     // The index in the TextLayout's text at the end of the line.
     text_end: usize,
-    end_run_index: usize,
     // The total width of all glyphs in each rect in the line.
     total_widths: SmallVec<[f32; 1]>,
     // TODO:  For justification, I probably need to add how many places there are to distribute
@@ -436,7 +435,6 @@ impl TextLayout {
         LineMeasurementAttempt {
             measurement: LineMeasurement {
                 text_end: glyph_runs[0].text_range.start + glyph_iter.pos.text_index,
-                end_run_index: glyph_iter.pos.run_index,
                 total_widths,
                 height,
                 baseline,
@@ -591,18 +589,6 @@ impl TextLayout {
         let mut start_run = 0;
         loop {
             let measurement = Self::measure_line_max(&glyph_runs[start_run..], &line_breaks, framer);
-            // TODO: I can't split it here. I have to split it in layout_line() because I need to
-            // split every line rect.
-            let run_index = measurement.end_run_index + start_run;
-            // The run needs split if the line ends within a run, not at a current run boundary.
-            if run_index < glyph_runs.len() &&
-                measurement.text_end != glyph_runs[run_index].text_range.start &&
-                measurement.text_end != glyph_runs[run_index].text_range.end
-            {
-                let run_split_index = measurement.text_end - glyph_runs[run_index].text_range.start;
-                let new_run = glyph_runs[run_index].split_off(run_split_index);
-                glyph_runs.insert(run_index + 1, new_run);
-            }
 
             self.layout_line(&mut glyph_runs, &mut start_run, &line_breaks, framer, measurement);
 
