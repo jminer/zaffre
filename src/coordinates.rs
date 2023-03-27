@@ -1,9 +1,26 @@
 
+use std::cmp;
 use std::fmt::Debug;
 use std::ops::{Add, Sub, Mul, Div, Neg};
 use super::nalgebra::{Cast, cast, Point2, Transpose, zero};
 use super::num::Zero;
 
+// TODO: use this for all the Size and Rect impls. I think it's needlessly complicated to have
+// narrower bounds.
+pub trait Num : Copy + Add<Output = Self> + Sub<Output = Self> + PartialOrd + Debug {
+    fn min(self, other: Self) -> Self;
+    fn max(self, other: Self) -> Self;
+}
+
+impl Num for f32 {
+    fn min(self, other: Self) -> Self {
+        self.min(other)
+    }
+
+    fn max(self, other: Self) -> Self {
+        self.max(other)
+    }
+}
 
 /// A size is a width and height.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -248,6 +265,22 @@ impl<N> Rect<N> where N: Copy
             (self.y, self.height)
         };
         Rect::new(x, y, width, height)
+    }
+}
+
+impl<N> Rect<N> where N: Num {
+    pub fn union(self, other: Self) -> Self {
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        let right = self.right().max(other.right());
+        let bottom = self.bottom().max(other.bottom());
+
+        Self {
+            x,
+            y,
+            width: right - x,
+            height: bottom - y,
+        }
     }
 }
 
