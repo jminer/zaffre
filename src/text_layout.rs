@@ -12,7 +12,7 @@ use crate::{Painter, Rect, Color};
 use crate::text_analyzer::{TextAnalyzer, TextAnalyzerGlyphRun, TextDirection};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TextAlignment {
+pub enum TextAlignment {
     // Defaults to left for LTR text and to right for RTL text.
     Natural,
     Left,
@@ -23,18 +23,21 @@ enum TextAlignment {
     Justify,
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct TextLayoutRun {
     glyph_run: TextAnalyzerGlyphRun,
     // The start of the run relative to the beginning of the line. The start of the run is on the
-    // left for LTR text and on the right for RTL text.
+    // left for LTR text and on the right for RTL text. Whether the paragraph direction is LTR or
+    // RTL doesn't have any affect.
     start_x: f32,
     // The end x isn't needed for drawing the run, but it makes it easier/faster to find which run a
     // point is in for hit testing.
     end_x: f32,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct TextLayoutLine {
-    rect: Rect<f32>,
+    bounds: Rect<f32>,
     // The baseline of the line relative to the top edge of the line's rect.
     baseline: f32,
     // The index of the first run in this line.
@@ -53,6 +56,18 @@ struct GlyphPosition {
     glyph_index: usize,
 }
 
+impl Default for GlyphPosition {
+    fn default() -> Self {
+        Self {
+            run_index: 0,
+            text_index: 0,
+            is_cluster_start: true,
+            glyph_index: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct GlyphIter {
     pos: GlyphPosition,
 }
@@ -60,12 +75,7 @@ struct GlyphIter {
 impl GlyphIter {
     fn new() -> Self {
         Self {
-            pos: GlyphPosition {
-                run_index: 0,
-                text_index: 0,
-                glyph_index: 0,
-                is_cluster_start: true,
-            },
+            pos: GlyphPosition::default(),
         }
     }
 
@@ -245,7 +255,11 @@ struct LineMeasurement {
     // The index in the TextLayout's text at the end of the line.
     text_end: usize,
     // The total width of all glyphs in each rect in the line.
-    total_widths: SmallVec<[f32; 1]>,
+    rects_glyph_widths: SmallVec<[f32; 1]>,
+    // The width of each set of consecutive same-direction runs on the line.
+    same_direction_widths: SmallVec<[f32; 1]>,
+    // The text index where text should be broken for each rect in the line.
+    break_indexes: SmallVec<[usize; 1]>,
     // TODO:  For justification, I probably need to add how many places there are to distribute
     // unused space.
     height: f32,
@@ -316,6 +330,13 @@ impl TextFramer for TextRectFramer {
 pub struct TextLayout {
     text: FormattedString,
     set_text_count: u32,
+    // The paragraph direction, or base direction as HTML calls it, determines the order that runs
+    // are laid out in a line. It is separate from the text direction within a run, which is the
+    // direction the glyphs are laid out. And both are unrelated to the text alignment.
+    // https://www.w3.org/International/articles/inline-bidi-markup/uba-basics#context
+    // https://unicode.org/reports/tr9/#BD5
+    paragraph_direction: TextDirection,
+    paragraph_alignment: TextAlignment,
     analyzer: Option<TextAnalyzer>,
     lines: Vec<TextLayoutLine>,
     runs: Vec<TextLayoutRun>,
@@ -326,6 +347,8 @@ impl TextLayout {
         Self {
             text: FormattedString::new(),
             set_text_count: 0,
+            paragraph_direction: TextDirection::LeftToRight,
+            paragraph_alignment: TextAlignment::Natural,
             analyzer: None,
             lines: Vec::new(),
             runs: Vec::new(),
@@ -356,6 +379,23 @@ impl TextLayout {
         }
     }
 
+    pub fn paragraph_direction(&self) -> TextDirection {
+        self.paragraph_direction
+    }
+
+    pub fn set_paragraph_direction(&mut self, paragraph_direction: TextDirection) {
+        self.paragraph_direction = paragraph_direction;
+    }
+
+    // TODO: would just `alignment` be a better name?
+    pub fn paragraph_alignment(&self) -> TextAlignment {
+        self.paragraph_alignment
+    }
+
+    pub fn set_paragraph_alignment(&mut self, paragraph_alignment: TextAlignment) {
+        self.paragraph_alignment = paragraph_alignment;
+    }
+
     // When laying out a line, one of the most complicated parts is handling text in a different
     // direction than the alignment. If you have LTR text followed by RTL text, all left-aligned,
     // then when you shrink the available space for the line, text moves from the middle of the line
@@ -380,6 +420,7 @@ impl TextLayout {
     fn measure_line(
         glyph_runs: &[TextAnalyzerGlyphRun],
         line_breaks: &BitVec,
+        paragraph_direction: TextDirection,
         framer: &mut dyn TextFramer,
         height: f32,
         baseline: f32,
@@ -387,20 +428,31 @@ impl TextLayout {
         debug_assert!(!glyph_runs.is_empty());
         let mut glyph_iter = GlyphIter::new();
 
-        let mut total_widths = SmallVec::<[f32; 1]>::new();
+        let mut rects_glyph_widths = SmallVec::<[f32; 1]>::new();
+        let mut same_direction_widths = SmallVec::<[f32; 1]>::new();
+        let mut break_indexes = SmallVec::<[usize; 1]>::new();
+
         let mut next_height = height;
         let mut next_baseline = baseline;
+        let mut curr_direction = glyph_runs[0].run.direction;
+        let mut same_direction_width = 0.0;
 
-        let rects = framer.next_line_rects(height, true);
+        let mut rects = framer.next_line_rects(height, true);
+        if paragraph_direction == TextDirection::RightToLeft {
+            rects.reverse();
+        }
         for rect in rects {
             let mut found_line_break = false;
             let mut line_break_pos = glyph_iter.pos;
             let mut line_break_total_glyph_width = 0.0;
-            let mut total_glyph_width = 0.0;
+
+            // the total width of glyphs in the current line rect
+            let mut rect_glyph_width = 0.0;
             let mut height_baseline_increased = false;
             while let Some(pos) = glyph_iter.next(glyph_runs) {
                 if pos.glyph_index == 0 {
-                    let run_metrics = glyph_runs[pos.run_index].font.metrics();
+                    let glyph_run = &glyph_runs[pos.run_index];
+                    let run_metrics = glyph_run.font.metrics();
                     let run_height = run_metrics.height();
                     // Add half the leading above and half below like explained above.
                     let run_ascent_plus = run_metrics.ascent + run_metrics.leading * 0.5;
@@ -409,15 +461,21 @@ impl TextLayout {
                         next_baseline = next_baseline.max(run_ascent_plus);
                         height_baseline_increased = true;
                     }
+
+                    if glyph_run.run.direction != curr_direction {
+                        same_direction_widths.push(same_direction_width);
+                        same_direction_width = 0.0;
+                        curr_direction = glyph_run.run.direction;
+                    }
                 }
 
                 let glyph_width = glyph_runs[pos.run_index].glyph_advances[pos.glyph_index];
-                if total_glyph_width + glyph_width > rect.width || height_baseline_increased {
+                if rect_glyph_width + glyph_width > rect.width || height_baseline_increased {
                     glyph_iter.reset(line_break_pos);
-                    total_glyph_width = line_break_total_glyph_width;
+                    rect_glyph_width = line_break_total_glyph_width;
                     break;
                 }
-                total_glyph_width += glyph_width;
+                rect_glyph_width += glyph_width;
 
                 let is_line_break = pos.is_cluster_start &&
                     line_breaks[glyph_runs[pos.run_index].text_range.start + pos.text_index];
@@ -426,16 +484,20 @@ impl TextLayout {
                 // many characters as possible in the line rect.
                 if !found_line_break || is_line_break {
                     line_break_pos = pos;
-                    line_break_total_glyph_width = total_glyph_width;
+                    line_break_total_glyph_width = rect_glyph_width;
                 }
             }
-            total_widths.push(total_glyph_width);
+            rects_glyph_widths.push(rect_glyph_width);
+            break_indexes.push(line_break_pos.text_index);
         }
+        same_direction_widths.push(same_direction_width);
 
         LineMeasurementAttempt {
             measurement: LineMeasurement {
                 text_end: glyph_runs[0].text_range.start + glyph_iter.pos.text_index,
-                total_widths,
+                rects_glyph_widths,
+                same_direction_widths,
+                break_indexes,
                 height,
                 baseline,
             },
@@ -447,6 +509,7 @@ impl TextLayout {
     fn measure_line_max(
         glyph_runs: &[TextAnalyzerGlyphRun],
         line_breaks: &BitVec,
+        paragraph_direction: TextDirection,
         framer: &mut dyn TextFramer,
     ) -> LineMeasurement {
         let font = &glyph_runs.first()
@@ -461,8 +524,10 @@ impl TextLayout {
                     let metrics = font.metrics();
                     (metrics.height(), metrics.ascent)
                 });
-            let new_attempt =
-                Self::measure_line(&glyph_runs, &line_breaks, framer, height, baseline);
+            let new_attempt = Self::measure_line(
+                &glyph_runs, &line_breaks, paragraph_direction, framer,
+                height, baseline
+            );
             if let Some(ref mut attempt) = attempt {
                 if new_attempt.measurement.text_end > attempt.measurement.text_end {
                     *attempt = new_attempt;
@@ -494,6 +559,20 @@ impl TextLayout {
     // The layout_line function takes the height, baseline, and unused space from the measure_line
     // function, and positions and splits the runs.
 
+
+    fn position_run(&mut self, run: TextAnalyzerGlyphRun, x: f32, width: f32) {
+        let (start_x, end_x) = if run.run.direction == TextDirection::LeftToRight {
+            (x, x + width)
+        } else {
+            (x + width, x)
+        };
+        self.runs.push(TextLayoutRun {
+            glyph_run: run,
+            start_x,
+            end_x,
+        });
+    }
+
     fn layout_line(
         &mut self,
         glyph_runs: &mut Vec<TextAnalyzerGlyphRun>,
@@ -501,6 +580,7 @@ impl TextLayout {
         line_breaks: &BitVec,
         framer: &mut dyn TextFramer,
         measurement: LineMeasurement,
+        alignment: TextAlignment,
     ) {
         // TODO: I could detect that even though this is a dry run, that there's no need to call it
         // again (ending by running out of space, not by getting too tall of a run) and switch to a
@@ -508,33 +588,124 @@ impl TextLayout {
         // performance. Also, center and justified need two passes through the runs, so maybe I'll
         // always need to dry run them anyway.
 
-        fn alignment_space(alignment: TextAlignment, unused_space: f32) -> (f32, f32) {
-            match alignment {
+        fn start_x(alignment: TextAlignment, dir: TextDirection, unused_space: f32) -> f32 {
+            match (alignment, dir) {
                 // Natural should be converted to an actual alignment first.
-                TextAlignment::Natural => panic!("invalid alignment"),
-                TextAlignment::Left => (0.0, unused_space),
-                TextAlignment::Center => (unused_space * 0.5, unused_space * 0.5),
-                TextAlignment::Right => (unused_space, 0.0),
-                TextAlignment::Justify => (0.0, 0.0),
+                (TextAlignment::Natural, _) => panic!("invalid alignment"),
+                (TextAlignment::Left, TextDirection::LeftToRight) => 0.0,
+                (TextAlignment::Left, TextDirection::RightToLeft) => unused_space,
+                (TextAlignment::Right, TextDirection::LeftToRight) => unused_space,
+                (TextAlignment::Right, TextDirection::RightToLeft) => 0.0,
+                (TextAlignment::Center, _) => unused_space * 0.5,
+                (TextAlignment::Justify, _) => 0.0,
             }
         }
 
         debug_assert!(!glyph_runs.is_empty());
         let mut glyph_iter = GlyphIter::new();
 
-        let alignment = TextAlignment::Left; // TODO:
+        let dir_factor = if self.paragraph_direction == TextDirection::LeftToRight {
+            1.0
+        } else {
+            -1.0
+        };
 
-        let rects = framer.next_line_rects(measurement.height, false);
+        let mut rects = framer.next_line_rects(measurement.height, false);
+        if self.paragraph_direction == TextDirection::RightToLeft {
+            rects.reverse();
+        }
+        debug_assert_eq!(measurement.rects_glyph_widths.len(), rects.len());
+        debug_assert_eq!(measurement.break_indexes.len(), rects.len());
         for (rect_index, rect) in rects.iter().enumerate() {
-            let total_width = measurement.total_widths[rect_index];
-            let (space_l, space_r) = alignment_space(alignment, rect.width - total_width);
+            let (rect_glyph_width, just_space) = if alignment == TextAlignment::Justify {
+                (rect.width, measurement.rects_glyph_widths[rect_index] - rect.width)
+            } else {
+                (measurement.rects_glyph_widths[rect_index], 0.0)
+            };
 
-            let run_width = 0.0;
+            let mut found_line_break = false;
+            let mut line_break_pos = glyph_iter.pos;
+            let mut line_break_rect_glyph_width = 0.0;
+
+            // para_x moves in the paragraph direction. It isn't really used unless the text has
+            // mixed directions.
+            let para_x = todo!();
+            // run_x moves the direction of consecutive same-direction runs
+            let run_x = todo!();
+
+            // - x starts on the left and increases if paragraph direction is LTR.
+            // - x starts on the right and decreases if paragraph direction is RTL.
+            let mut x = start_x(alignment, self.paragraph_direction, rect.width - rect_glyph_width);
+            // the total width of glyphs in the current line rect
+            let mut rect_glyph_width = 0.0;
+            let mut run_glyph_width = 0.0;
+            let mut prev_pos = None;
             while let Some(pos) = glyph_iter.next(&glyph_runs[*first_run..]) {
+                // check width, and if too wide, go back to line break and if necessary, split run
+                // glyph_iter should be the split-off run
+                let is_break = pos.text_index == measurement.break_indexes[rect_index];
+                if is_break {
 
+                }
 
+                let glyph_width = glyph_runs[pos.run_index].glyph_advances[pos.glyph_index];
+                if rect_glyph_width + glyph_width > rect.width {
+                    glyph_iter.reset(line_break_pos);
+                    rect_glyph_width = line_break_rect_glyph_width;
+                    todo!(); // have to reset run_glyph_width
+
+                    // If not at a run boundary, we have to split the run.
+                    let pos = glyph_iter.pos;
+                    if pos.text_index != 0 {
+                        let new_run = glyph_runs[pos.glyph_index].split_off(pos.text_index);
+                        glyph_runs.insert(pos.run_index + 1, new_run);
+                        glyph_iter.pos = GlyphPosition {
+                            run_index: pos.run_index + 1,
+                            ..Default::default()
+                        };
+                    }
+
+                    self.position_run(glyph_runs[pos.glyph_index].clone(), x, run_glyph_width);
+
+                    break;
+                }
+                rect_glyph_width += glyph_width;
+                run_glyph_width += glyph_width;
+
+                // When finished with a run, we have to position it.
+                if pos.glyph_index == glyph_runs[pos.run_index].glyphs.len() - 1 {
+                    self.position_run(glyph_runs[pos.glyph_index].clone(), x, run_glyph_width);
+                    todo!(); // can't add rect_glyph_width to x
+                    x += run_glyph_width * dir_factor;
+                    run_glyph_width = 0.0;
+                }
+
+                // TODO: write test that fails if this is checked earlier in the loop
+                // (and test(s) that fail if other checks are different order)
+                let is_line_break = pos.is_cluster_start &&
+                    line_breaks[glyph_runs[pos.run_index].text_range.start + pos.text_index];
+                found_line_break |= is_line_break;
+                // If there isn't enough room to get to the first line break position, just put as
+                // many characters as possible in the line rect.
+                if !found_line_break || is_line_break {
+                    line_break_pos = pos;
+                    line_break_rect_glyph_width = rect_glyph_width;
+                }
+
+                prev_pos = Some(pos);
             }
         }
+        // TODO: it would be nice to position the run at the last glyph in the loop so that I don't have to here
+
+        // TODO: set first_run
+
+        let line_bounds = rects.iter().fold(rects[0], |acc, r| acc.union(*r));
+        let line = TextLayoutLine {
+            bounds: line_bounds,
+            baseline: measurement.baseline,
+            first_run: *first_run as u32,
+        };
+        self.lines.push(line);
 
         // if !dry_run {
         //     self.lines.push(TextLayoutLine {
@@ -549,10 +720,14 @@ impl TextLayout {
         self.ensure_analyzer();
         let analyzer = self.analyzer.as_ref().unwrap(); // set by previous line
         let ana_runs = analyzer.get_runs();
-        let natural_alignment = ana_runs.first().map(|run| match run.direction() {
-            TextDirection::LeftToRight => TextAlignment::Left,
-            TextDirection::RightToLeft => TextAlignment::Right,
-        }).unwrap_or(TextAlignment::Left);
+        let alignment = if self.paragraph_alignment == TextAlignment::Natural {
+            ana_runs.first().map(|run| match run.direction() {
+                TextDirection::LeftToRight => TextAlignment::Left,
+                TextDirection::RightToLeft => TextAlignment::Right,
+            }).unwrap_or(TextAlignment::Left)
+        } else {
+            self.paragraph_alignment
+        };
 
         // Should I do something other than panic? I think this is a programming error, so
         // probably leave as is.
@@ -588,9 +763,17 @@ impl TextLayout {
 
         let mut start_run = 0;
         loop {
-            let measurement = Self::measure_line_max(&glyph_runs[start_run..], &line_breaks, framer);
+            let measurement = Self::measure_line_max(
+                    &glyph_runs[start_run..], &line_breaks, self.paragraph_direction, framer);
 
-            self.layout_line(&mut glyph_runs, &mut start_run, &line_breaks, framer, measurement);
+            self.layout_line(
+                &mut glyph_runs,
+                &mut start_run,
+                &line_breaks,
+                framer,
+                measurement,
+                alignment,
+            );
 
             break;
         }
@@ -664,18 +847,20 @@ impl TextLayout {
 
     // For DirectWrite, I think just use the cluster map. I think macOS and probably Pango have
     // functions to get caret offsets. I need to add a function to TextAnalyzer too.
-
 }
 
 #[cfg(test)]
 mod text_layout_tests {
+    use approx::assert_abs_diff_eq;
+
+    use crate::text_analyzer::TextDirection;
     use crate::{font, Rect};
     use crate::text::FormattedString;
 
-    use super::{TextLayout, TextRectFramer};
+    use super::{TextLayout, TextRectFramer, TextAlignment};
 
     #[test]
-    fn basic_text_layout() {
+    fn basic_text_layout_no_panic() {
         let font_family = font::get_family("DejaVu Sans")
             .expect("couldn't find font");
         let font = font_family.get_styles()[0].get_font(20.0);
@@ -685,6 +870,61 @@ mod text_layout_tests {
         text.set_initial_font(font);
         let mut layout = TextLayout::new();
         layout.set_text(text);
-        layout.layout(&mut TextRectFramer::new(Rect::new(5.0, 5.0, 50_000.0, 30.0)));
+        layout.layout(&mut TextRectFramer::new(Rect::new(10.0, 10.0, 50_000.0, 30.0)));
     }
+
+    fn basic_text_layout_two_ltr_runs_with_direction(dir: TextDirection) {
+        eprintln!("checking direction {:?}", dir);
+
+        let font_family = font::get_family("DejaVu Sans")
+            .expect("couldn't find font");
+        let font = font_family.get_styles()[0].get_font(20.0);
+
+        let mut text = FormattedString::new();
+        text.clear_and_set_text_from(&"ЕйJohn".to_owned());
+        text.set_initial_font(font);
+        let mut layout = TextLayout::new();
+        layout.set_text(text);
+        layout.set_paragraph_alignment(TextAlignment::Left);
+        layout.set_paragraph_direction(dir);
+        layout.layout(&mut TextRectFramer::new(Rect::new(10.0, 10.0, 50_000.0, 30.0)));
+
+        assert_eq!(layout.lines.len(), 1);
+        assert_eq!(layout.runs.len(), 2);
+
+        assert_abs_diff_eq!(layout.runs[0].start_x, 0.0, epsilon = 0.5);
+        assert_abs_diff_eq!(layout.runs[0].end_x, 27.0, epsilon = 0.5);
+
+        assert_abs_diff_eq!(layout.runs[1].start_x, 27.0, epsilon = 0.5);
+        assert_abs_diff_eq!(layout.runs[1].end_x, 74.0, epsilon = 0.5);
+    }
+
+    #[test]
+    fn basic_text_layout_two_runs() {
+        // The paragraph direction shouldn't change the order of consecutive LTR runs.
+        basic_text_layout_two_ltr_runs_with_direction(TextDirection::LeftToRight);
+        basic_text_layout_two_ltr_runs_with_direction(TextDirection::RightToLeft);
+    }
+
+    // TODO: test:
+    // - line breaking with ltr run
+    // - line breaking with rtl run
+    // - line breaking with ltr para direction
+    // - line breaking with rtl para direction
+    // - para direction auto detect?
+    // - that a taller run moves the baseline down
+    // - that a shorter run leaves the baseline the same
+    // - that a taller run the same character that get wrapped to the next line doesn't move the
+    //   baseline down
+    // - center align
+    // - right align
+    // - TextFramer doesn't return enough line rects to fit all text so layout has to stop
+    // - a taller run making TextFramer return a narrower line that doesn't fit as much text, so it
+    //   uses the previous measure_line() call
+    // - glyphs are too large to fit in rects that TextFramer returns (like you'd easily get with a
+    //   huge font size)
+    // - line breaking when no line break has been found
+    // - line breaking when on the glyph before the space
+    // - line breaking when on the space glyph
+    // - line breaking when on the glyph after the space
 }
