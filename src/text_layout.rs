@@ -251,21 +251,28 @@ mod glyph_iter_tests {
 
 }
 
+#[derive(Debug)]
+struct LineRectMeasurement {
+    // The total width of all glyphs in the rect.
+    rect_glyph_width: f32,
+    // The width of each set of consecutive same-direction runs in the rect.
+    same_direction_widths: SmallVec<[f32; 1]>,
+    // The text index where text should be broken at the end of the rect.
+    break_index: usize,
+}
+
+#[derive(Debug)]
 struct LineMeasurement {
     // The index in the TextLayout's text at the end of the line.
     text_end: usize,
-    // The total width of all glyphs in each rect in the line.
-    rects_glyph_widths: SmallVec<[f32; 1]>,
-    // The width of each set of consecutive same-direction runs on the line.
-    same_direction_widths: SmallVec<[f32; 1]>,
-    // The text index where text should be broken for each rect in the line.
-    break_indexes: SmallVec<[usize; 1]>,
+    rect_measurements: SmallVec<[LineRectMeasurement; 1]>,
     // TODO:  For justification, I probably need to add how many places there are to distribute
     // unused space.
     height: f32,
     baseline: f32,
 }
 
+#[derive(Debug)]
 struct LineMeasurementAttempt {
     measurement: LineMeasurement,
     next_height: f32,
@@ -428,23 +435,25 @@ impl TextLayout {
         debug_assert!(!glyph_runs.is_empty());
         let mut glyph_iter = GlyphIter::new();
 
-        let mut rects_glyph_widths = SmallVec::<[f32; 1]>::new();
-        let mut same_direction_widths = SmallVec::<[f32; 1]>::new();
-        let mut break_indexes = SmallVec::<[usize; 1]>::new();
+        let mut rect_measurements = SmallVec::<[LineRectMeasurement; 1]>::new();
 
         let mut next_height = height;
         let mut next_baseline = baseline;
-        let mut curr_direction = glyph_runs[0].run.direction;
-        let mut same_direction_width = 0.0;
 
         let mut rects = framer.next_line_rects(height, true);
         if paragraph_direction == TextDirection::RightToLeft {
             rects.reverse();
         }
         for rect in rects {
+            let mut same_direction_widths = SmallVec::<[f32; 1]>::new();
+            let mut curr_direction = glyph_runs[glyph_iter.pos.run_index].run.direction;
+            let mut same_direction_width = 0.0;
+
             let mut found_line_break = false;
             let mut line_break_pos = glyph_iter.pos;
-            let mut line_break_total_glyph_width = 0.0;
+            let mut line_break_rect_glyph_width = 0.0;
+            let mut line_break_same_direction_width = 0.0;
+            let mut line_break_same_direction_widths_len = 0;
 
             // the total width of glyphs in the current line rect
             let mut rect_glyph_width = 0.0;
@@ -472,10 +481,13 @@ impl TextLayout {
                 let glyph_width = glyph_runs[pos.run_index].glyph_advances[pos.glyph_index];
                 if rect_glyph_width + glyph_width > rect.width || height_baseline_increased {
                     glyph_iter.reset(line_break_pos);
-                    rect_glyph_width = line_break_total_glyph_width;
+                    rect_glyph_width = line_break_rect_glyph_width;
+                    same_direction_width = line_break_same_direction_width;
+                    same_direction_widths.truncate(line_break_same_direction_widths_len);
                     break;
                 }
                 rect_glyph_width += glyph_width;
+                same_direction_width += glyph_width;
 
                 let is_line_break = pos.is_cluster_start &&
                     line_breaks[glyph_runs[pos.run_index].text_range.start + pos.text_index];
@@ -484,20 +496,31 @@ impl TextLayout {
                 // many characters as possible in the line rect.
                 if !found_line_break || is_line_break {
                     line_break_pos = pos;
-                    line_break_total_glyph_width = rect_glyph_width;
+                    line_break_rect_glyph_width = rect_glyph_width;
+                    line_break_same_direction_width = same_direction_width;
+                    line_break_same_direction_widths_len = same_direction_widths.len();
                 }
             }
-            rects_glyph_widths.push(rect_glyph_width);
-            break_indexes.push(line_break_pos.text_index);
+            if same_direction_width != 0.0 {
+                same_direction_widths.push(same_direction_width);
+            }
+            // Convert pos.text_index to absolute.
+            let break_index = match glyph_runs.get(glyph_iter.pos.run_index) {
+                Some(run) => run.text_range.start + glyph_iter.pos.text_index,
+                None => glyph_runs[glyph_iter.pos.run_index - 1].text_range.end,
+            };
+
+            rect_measurements.push(LineRectMeasurement {
+                rect_glyph_width,
+                same_direction_widths,
+                break_index,
+            });
         }
-        same_direction_widths.push(same_direction_width);
 
         LineMeasurementAttempt {
             measurement: LineMeasurement {
-                text_end: glyph_runs[0].text_range.start + glyph_iter.pos.text_index,
-                rects_glyph_widths,
-                same_direction_widths,
-                break_indexes,
+                text_end: rect_measurements.last().unwrap().break_index,
+                rect_measurements,
                 height,
                 baseline,
             },
@@ -614,18 +637,14 @@ impl TextLayout {
         if self.paragraph_direction == TextDirection::RightToLeft {
             rects.reverse();
         }
-        debug_assert_eq!(measurement.rects_glyph_widths.len(), rects.len());
-        debug_assert_eq!(measurement.break_indexes.len(), rects.len());
+        debug_assert_eq!(measurement.rect_measurements.len(), rects.len());
         for (rect_index, rect) in rects.iter().enumerate() {
+            let rect_measurement = &measurement.rect_measurements[rect_index];
             let (rect_glyph_width, just_space) = if alignment == TextAlignment::Justify {
-                (rect.width, measurement.rects_glyph_widths[rect_index] - rect.width)
+                (rect.width, rect_measurement.rect_glyph_width - rect.width)
             } else {
-                (measurement.rects_glyph_widths[rect_index], 0.0)
+                (rect_measurement.rect_glyph_width, 0.0)
             };
-
-            let mut found_line_break = false;
-            let mut line_break_pos = glyph_iter.pos;
-            let mut line_break_rect_glyph_width = 0.0;
 
             // para_x moves in the paragraph direction. It isn't really used unless the text has
             // mixed directions.
@@ -636,40 +655,34 @@ impl TextLayout {
             // - x starts on the left and increases if paragraph direction is LTR.
             // - x starts on the right and decreases if paragraph direction is RTL.
             let mut x = start_x(alignment, self.paragraph_direction, rect.width - rect_glyph_width);
-            // the total width of glyphs in the current line rect
-            let mut rect_glyph_width = 0.0;
             let mut run_glyph_width = 0.0;
-            let mut prev_pos = None;
-            while let Some(pos) = glyph_iter.next(&glyph_runs[*first_run..]) {
+            let mut next_pos = glyph_iter.next(&glyph_runs[*first_run..]);
+            while let Some(pos) = next_pos {
                 // check width, and if too wide, go back to line break and if necessary, split run
                 // glyph_iter should be the split-off run
-                let is_break = pos.text_index == measurement.break_indexes[rect_index];
-                if is_break {
 
-                }
-
-                let glyph_width = glyph_runs[pos.run_index].glyph_advances[pos.glyph_index];
-                if rect_glyph_width + glyph_width > rect.width {
-                    glyph_iter.reset(line_break_pos);
-                    rect_glyph_width = line_break_rect_glyph_width;
-                    todo!(); // have to reset run_glyph_width
-
-                    // If not at a run boundary, we have to split the run.
-                    let pos = glyph_iter.pos;
-                    if pos.text_index != 0 {
-                        let new_run = glyph_runs[pos.glyph_index].split_off(pos.text_index);
+                let mut is_break = false;
+                // Split the run if it is broken between line rects or lines.
+                if let Some(next_pos) = next_pos {
+                    let next_abs_text_index =
+                        glyph_runs[next_pos.run_index].text_range.start + next_pos.text_index;
+                    is_break = next_abs_text_index == rect_measurement.break_index;
+                    if is_break && next_pos.text_index != 0
+                    {
+                        // The run index should match because the text index != 0. (The text index
+                        // of course goes back to 0 when the run index increments.)
+                        assert!(next_pos.run_index == pos.run_index);
+                        let new_run = glyph_runs[pos.run_index].split_off(next_pos.text_index);
                         glyph_runs.insert(pos.run_index + 1, new_run);
+                        // next_pos doesn't exist anymore so fix the GlyphIter
                         glyph_iter.pos = GlyphPosition {
                             run_index: pos.run_index + 1,
                             ..Default::default()
                         };
                     }
-
-                    self.position_run(glyph_runs[pos.glyph_index].clone(), x, run_glyph_width);
-
-                    break;
                 }
-                rect_glyph_width += glyph_width;
+
+                let glyph_width = glyph_runs[pos.run_index].glyph_advances[pos.glyph_index];
                 run_glyph_width += glyph_width;
 
                 // When finished with a run, we have to position it.
@@ -680,19 +693,11 @@ impl TextLayout {
                     run_glyph_width = 0.0;
                 }
 
-                // TODO: write test that fails if this is checked earlier in the loop
-                // (and test(s) that fail if other checks are different order)
-                let is_line_break = pos.is_cluster_start &&
-                    line_breaks[glyph_runs[pos.run_index].text_range.start + pos.text_index];
-                found_line_break |= is_line_break;
-                // If there isn't enough room to get to the first line break position, just put as
-                // many characters as possible in the line rect.
-                if !found_line_break || is_line_break {
-                    line_break_pos = pos;
-                    line_break_rect_glyph_width = rect_glyph_width;
+                if is_break {
+                    break;
                 }
 
-                prev_pos = Some(pos);
+                next_pos = glyph_iter.next(&glyph_runs[*first_run..]);
             }
         }
         // TODO: it would be nice to position the run at the last glyph in the loop so that I don't have to here
