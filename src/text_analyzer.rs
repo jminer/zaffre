@@ -65,6 +65,7 @@ impl TextAnalyzerGlyphRun {
             new_vec
         }
 
+        debug_assert!(split_index > 0);
         debug_assert!(split_index < self.text_range.end - self.text_range.start);
 
         let mut new_cluster_map = smallvec_split_off(&mut self.cluster_map, split_index);
