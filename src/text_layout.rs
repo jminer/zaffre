@@ -1,5 +1,5 @@
 use std::cell::Cell;
-use std::iter;
+use std::{f32, iter};
 use std::rc::Rc;
 
 use bit_vec::BitVec;
@@ -9,7 +9,7 @@ use smallvec::SmallVec;
 use crate::font::Font;
 use crate::text::FormattedString;
 use crate::{Painter, Rect, Color};
-use crate::text_analyzer::{TextAnalyzer, TextAnalyzerGlyphRun, TextDirection};
+use crate::text_analyzer::{direction_factor, TextAnalyzer, TextAnalyzerGlyphRun, TextDirection};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextAlignment {
@@ -342,11 +342,13 @@ struct BidiLineLayout<'a> {
     // Index of the next same-direction width to use.
     same_direction_index: usize,
     same_direction_rem_width: f32,
+    // Only used for debug_asserts that the runs change direction at the correct places.
+    prev_run_direction: TextDirection,
 
     // Moves in the paragraph direction
     x: f32,
-    // Moves in the direction of a set of same-direction runs
-    same_direction_x: f32,
+    
+    layout_runs: Vec<TextLayoutRun>,
 }
 
 impl<'a> BidiLineLayout<'a> {
@@ -355,6 +357,11 @@ impl<'a> BidiLineLayout<'a> {
             paragraph_direction,
             paragraph_alignment,
             same_direction_widths: &[],
+            same_direction_index: 0,
+            same_direction_rem_width: 0,
+            prev_run_direction: TextDirection::LeftToRight,
+            x: f32::NAN,
+            layout_runs: vec![],
         }
     }
 
@@ -366,12 +373,23 @@ impl<'a> BidiLineLayout<'a> {
         same_direction_widths: &'a [f32],
     ) {
         self.same_direction_widths = same_direction_widths;
-        // TODO: init x correctly taking into account alignment (which needs rect_glyph_width)
-        assert!(self.paragraph_alignment == TextAlignment::Left);
+        let unused = rect_width - rect_glyph_width;
         self.x = if self.paragraph_direction == TextDirection::LeftToRight {
-            rect_x
+            match self.paragraph_alignment {
+                TextAlignment::Justify |
+                TextAlignment::Natural |
+                TextAlignment::Left => rect_x,
+                TextAlignment::Center => rect_x + unused * 0.5,
+                TextAlignment::Right => rect_x + unused,
+            }
         } else {
-            rect_x + rect_width
+            match self.paragraph_alignment {
+                TextAlignment::Left => rect_x + rect_glyph_width,
+                TextAlignment::Center => rect_x + rect_glyph_width + unused * 0.5,
+                TextAlignment::Justify |
+                TextAlignment::Natural |
+                TextAlignment::Right => rect_x + rect_width,
+            }
         };
         self.same_direction_index = 0;
         self.same_direction_rem_width = 0.0;
@@ -379,18 +397,36 @@ impl<'a> BidiLineLayout<'a> {
 
 
     fn position_run(&mut self, run: TextAnalyzerGlyphRun, run_width: f32) {
-
         if approx::abs_diff_eq!(self.same_direction_rem_width, 0.0, epsilon = 0.001) {
+            if self.same_direction_index > 0 {
+                // The runs should change direction IFF self.same_direction_rem_width gets to 0.
+                debug_assert_ne!(run.run.direction(), self.prev_run_direction);
+            }
+            self.prev_run_direction = run.run.direction();
+
+            let anti_para_dir_width = self.same_direction_widths[self.same_direction_index +
+                if run.run.direction() != self.paragraph_direction { 0 } else { 1 }
+            ];
+            self.x += anti_para_dir_width * self.paragraph_direction.factor();
             self.same_direction_rem_width = self.same_direction_widths[self.same_direction_index];
             self.same_direction_index += 1;
-            if self.paragraph_direction == TextDirection::LeftToRight {
-                self.x += self.same_direction_widths[self.same_direction_index];
-            } else {
-                self.x -= self.same_direction_widths[self.same_direction_index];
-            }
-            // TODO: adjust x
+        } else {
+            debug_assert_eq!(run.run.direction(), self.prev_run_direction);
         }
         assert!(self.same_direction_rem_width > -0.001);
+
+        // We are currently positioning runs inside the (self.same_direction_index - 1)
+        let (left, right) = if self.paragraph_direction == TextDirection::LeftToRight {
+            (x, x + run_width)
+        } else {
+            (x + run_width, x)
+        };
+        self.layout_runs.push(TextLayoutRun {
+            glyph_run: run,
+            left,
+            right,
+        });
+        x += run_width * run.run.direction().factor();
 
         self.same_direction_rem_width -= run_width;
     }
