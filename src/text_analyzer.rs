@@ -17,6 +17,18 @@ pub enum TextDirection {
     RightToLeft,
 }
 
+impl TextDirection {
+    // Returns 1.0 for LTR and -1.0 for RTL to make it easier to flip calculations depending on the
+    // text direction. Checking the assembly, I saw that when multiplying by the return value, LLVM
+    // optimizes to an x86 instruction that XORs the sign bit.
+    pub(crate) fn factor(self) -> f32 {
+        match self {
+            TextDirection::LeftToRight => 1.0,
+            TextDirection::RightToLeft => -1.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TextAnalyzerRun<B: GenericTextAnalyzerRunBackend = TextAnalyzerRunBackend> {
     pub(crate) text_range: Range<usize>,

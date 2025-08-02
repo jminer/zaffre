@@ -690,11 +690,7 @@ impl TextLayout {
         debug_assert!(!glyph_runs.is_empty());
         let mut glyph_iter = GlyphIter::new();
 
-        let dir_factor = if self.paragraph_direction == TextDirection::LeftToRight {
-            1.0
-        } else {
-            -1.0
-        };
+        let dir_factor = self.paragraph_direction.factor();
 
         let mut rects = framer.next_line_rects(measurement.height, false);
         if self.paragraph_direction == TextDirection::RightToLeft {
